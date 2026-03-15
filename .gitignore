@@ -1,0 +1,27 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# virtual environments
+.venv/
+venv/
+
+# project runtime
+sessions/
+workspace/
+app.log
+
+# ide
+.vscode/
+.idea/
+
+# uv
+uv.lock
+pyproject.toml
+.python-version
