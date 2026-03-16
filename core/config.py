@@ -6,16 +6,28 @@ load_dotenv()
 # API Keys
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# Models
-OPENROUTER_MODEL = "openrouter/hunter-alpha"
-
-# Base URL
+# Base URL — both models via OpenRouter
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# Models
+HUNTER_MODEL = "openrouter/hunter-alpha"
+MINIMAX_MODEL = "minimax/minimax-m2.5"
 
 # Paths
 WORKSPACE_PATH = "./workspace"
 SESSIONS_PATH  = "./sessions"
 
-# Limits
-MAX_FILE_SIZE_KB = 150
-MAX_TOKENS       = 12000
+# Model context limits
+HUNTER_CONTEXT_WINDOW  = 1_000_000   # hunter-alpha
+MINIMAX_CONTEXT_WINDOW = 196_608     # minimax-m2.5
+
+# Hunter limits — Orchestrator + Explorer
+HUNTER_MAX_TOKENS        = int(HUNTER_CONTEXT_WINDOW * 0.80)   # 800000
+HUNTER_MAX_OUTPUT_TOKENS = int(HUNTER_CONTEXT_WINDOW * 0.15)   # 150000
+
+# MiniMax limits — Coder
+MINIMAX_MAX_TOKENS        = int(MINIMAX_CONTEXT_WINDOW * 0.80)  # 157286
+MINIMAX_MAX_OUTPUT_TOKENS = int(MINIMAX_CONTEXT_WINDOW * 0.15)  # 29491
+
+# File size limit
+MAX_FILE_SIZE_KB = 50000
