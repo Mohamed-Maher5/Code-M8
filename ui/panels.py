@@ -1,31 +1,16 @@
-# Rich layout panels — chat, file tree, agent status
-
+import asyncio
+import time
+import threading
 from rich.panel import Panel
 from rich.layout import Layout
 from rich.text import Text
 from rich.console import Console
 from rich.align import Align
 from rich.table import Table
+from rich.live import Live
+from rich.columns import Columns
 
 console = Console()
-
-LOGO_LINES = [
-    (" ██████╗ ", "bold red",     "██████╗ ", "bold yellow",  "██████╗ ", "bold green",  "███████╗", "bold cyan"),
-    ("██╔════╝ ", "bold red",     "██╔═══██╗", "bold yellow", "██╔══██╗", "bold green",  "██╔════╝", "bold cyan"),
-    ("██║      ", "bold red",     "██║   ██║", "bold yellow", "██║  ██║", "bold green",  "█████╗  ", "bold cyan"),
-    ("██║      ", "bold red",     "██║   ██║", "bold yellow", "██║  ██║", "bold green",  "██╔══╝  ", "bold cyan"),
-    ("╚██████╗ ", "bold red",     "╚██████╔╝", "bold yellow", "██████╔╝", "bold green",  "███████╗", "bold cyan"),
-    (" ╚═════╝ ", "bold red",     " ╚═════╝ ", "bold yellow", "╚═════╝ ", "bold green",  "╚══════╝", "bold cyan"),
-]
-
-M8_LINES = [
-    ("███╗   ███╗", "bold magenta", " █████╗ ", "bold bright_magenta"),
-    ("████╗ ████║", "bold magenta", "██╔══██╗", "bold bright_magenta"),
-    ("██╔████╔██║", "bold magenta", "╚█████╔╝", "bold bright_magenta"),
-    ("██║╚██╔╝██║", "bold magenta", "██╔══██╗", "bold bright_magenta"),
-    ("██║ ╚═╝ ██║", "bold magenta", "╚█████╔╝", "bold bright_magenta"),
-    ("╚═╝     ╚═╝", "bold magenta", " ╚════╝ ", "bold bright_magenta"),
-]
 
 TAGLINE = "Your AI coding teammate — reads your code, writes what you need"
 
@@ -37,24 +22,106 @@ COMMANDS = [
     ("/exit",    "quit",                  "red"),
 ]
 
+LOGO = """\
+[bold bright_cyan] ██████╗ ██████╗ ██████╗ ███████╗    ███╗   ███╗ █████╗ [/bold bright_cyan]
+[bold bright_cyan]██╔════╝██╔═══██╗██╔══██╗██╔════╝    ████╗ ████║██╔══██╗[/bold bright_cyan]
+[bold bright_cyan]██║     ██║   ██║██║  ██║█████╗      ██╔████╔██║╚█████╔╝[/bold bright_cyan]
+[bold bright_cyan]██║     ██║   ██║██║  ██║██╔══╝      ██║╚██╔╝██║██╔══██╗[/bold bright_cyan]
+[bold bright_cyan]╚██████╗╚██████╔╝██████╔╝███████╗    ██║ ╚═╝ ██║╚█████╔╝[/bold bright_cyan]
+[bold bright_cyan] ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚═╝     ╚═╝ ╚════╝ [/bold bright_cyan]"""
+
+ROBOT_OPEN = """\
+[bold red]        ●[/bold red]
+[bold red]        │[/bold red]
+[bold white]  ╔═══════════════╗[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░[/bold bright_cyan][bold white]╰───────╯[/bold white][bold bright_cyan]░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ╚═══════════════╝[/bold white]"""
+
+ROBOT_BLINK = """\
+[bold red]        ●[/bold red]
+[bold red]        │[/bold red]
+[bold white]  ╔═══════════════╗[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░─░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░─░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░[/bold bright_cyan][bold white]╰───────╯[/bold white][bold bright_cyan]░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ╚═══════════════╝[/bold white]"""
+
+ROBOT_WINK = """\
+[bold red]        ●[/bold red]
+[bold red]        │[/bold red]
+[bold white]  ╔═══════════════╗[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░─░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░[/bold bright_cyan][bold white]╰───────╯[/bold white][bold bright_cyan]░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ╚═══════════════╝[/bold white]"""
+
+ROBOT_HAPPY = """\
+[bold red]        ●[/bold red]
+[bold red]        │[/bold red]
+[bold white]  ╔═══════════════╗[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╔═════╗[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░░░░[/bold bright_cyan][bold white]║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░[/bold bright_cyan][bold white]╚═════╝[/bold white][bold bright_cyan]░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░[/bold bright_cyan][bold white]╰─────────╯[/bold white][bold bright_cyan]░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ║[/bold white][bold bright_cyan]░░░░░░░░░░░░░░░[/bold bright_cyan][bold white]║[/bold white]
+[bold white]  ╚═══════════════╝[/bold white]"""
+
+SEQUENCE = [
+    (ROBOT_OPEN,  0.8),
+    (ROBOT_BLINK, 0.2),
+    (ROBOT_OPEN,  0.5),
+    (ROBOT_WINK,  0.3),
+    (ROBOT_OPEN,  0.5),
+    (ROBOT_BLINK, 0.2),
+    (ROBOT_OPEN,  0.5),
+    (ROBOT_HAPPY, 0.8),
+    (ROBOT_OPEN,  1.1),
+]
+
+def build_frame(robot: str) -> Align:
+    logo_panel = Panel(
+        f"{LOGO}\n\n[dim italic]{TAGLINE}[/dim italic]",
+        border_style="bright_cyan",
+        padding=(2, 4)
+    )
+    return Align.center(
+        Columns(
+            [logo_panel, Align.center(robot, vertical="middle")],
+            equal=False,
+            expand=False,
+            align="center"
+        ),
+        vertical="middle"
+    )
+
+async def _animate():
+    with Live(console=console, refresh_per_second=10) as live:
+        for frame, duration in SEQUENCE:
+            live.update(build_frame(frame))
+            await asyncio.sleep(duration)
+
 def print_logo():
-    # build colorful logo line by line
-    console.print()
-    for i, (line, cols) in enumerate(zip(LOGO_LINES, M8_LINES)):
-        c1, s1, c2, s2, c3, s3, c4, s4 = line
-        m1, ms1, m2, ms2 = cols
-        console.print(
-            Align.center(
-                f"[{s1}]{c1}[/{s1}][{s2}]{c2}[/{s2}][{s3}]{c3}[/{s3}][{s4}]{c4}[/{s4}]"
-                f"    [{ms1}]{m1}[/{ms1}][{ms2}]{m2}[/{ms2}]"
-            )
-        )
+    asyncio.run(_animate())
 
-    console.print()
-    console.print(Align.center(f"[dim italic]{TAGLINE}[/dim italic]"))
+    console.clear()
     console.print()
 
-    # commands table — fixed width columns for perfect alignment
     table = Table(
         show_header=False,
         box=None,
@@ -89,3 +156,29 @@ def print_logo():
         Align.center("[dim]── type a command or start typing your request ──[/dim]")
     )
     console.print()
+
+def build_layout() -> Layout:
+    layout = Layout()
+    layout.split_row(
+        Layout(name="chat",    ratio=3),
+        Layout(name="sidebar", ratio=1)
+    )
+    layout["sidebar"].split_column(
+        Layout(name="files",  ratio=2),
+        Layout(name="status", ratio=1)
+    )
+    return layout
+
+def make_status_panel(message: str) -> Panel:
+    return Panel(
+        Text(message, style="dim"),
+        title="[bold blue] agent status [/bold blue]",
+        border_style="blue"
+    )
+
+def make_files_panel(file_list: str) -> Panel:
+    return Panel(
+        Text(file_list, style="dim"),
+        title="[bold green] workspace files [/bold green]",
+        border_style="green"
+    )
