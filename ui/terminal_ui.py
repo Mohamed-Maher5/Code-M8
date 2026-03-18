@@ -17,18 +17,16 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from context.file_loader import load_files
 from core.config import WORKSPACE_PATH
 from ui.input_handler import handle_input
-from ui.panels import print_logo
-from ui.renderer import render_response
+from ui.panels        import print_logo
+from ui.renderer      import render_response
 from utils.logger import logger
 
 console = Console()
 
 ACCENT  = "bright_cyan"
 DIM     = "grey50"
-SUCCESS = "bright_green"
 ERROR   = "bright_red"
 WARN    = "yellow"
 
@@ -36,7 +34,6 @@ AGENT_ICONS = {
     "orchestrator": "🧠",
     "explorer":     "🔍",
     "coder":        "⚡",
-    "runner":       "🧪",
 }
 
 THINK_FRAMES = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"]
@@ -149,8 +146,6 @@ class TerminalUI:
                 logger.error(f"UI error: {e}")
                 console.print(f"\n  [{ERROR}]Error:[/{ERROR}] [{DIM}]{e}[/{DIM}]\n")
 
-    # ── Turn ──────────────────────────────────────────────────────────────────
-
     def _run_turn(self, user_input: str) -> None:
         self.turn += 1
         console.print()
@@ -184,8 +179,6 @@ class TerminalUI:
                 )
             )
         console.print()
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _get_input(self) -> str:
         try:
@@ -227,18 +220,27 @@ class TerminalUI:
         console.print()
 
     def _show_files(self) -> None:
-        files = load_files(WORKSPACE_PATH)
-        if not files:
+        from pathlib import Path
+        import core.config as CONFIG
+
+        workspace = Path(CONFIG.WORKSPACE_PATH).resolve()
+
+        if not workspace.exists():
             console.print(f"  [{WARN}]Workspace is empty.[/{WARN}]\n")
             return
+
         console.print()
-        for path, meta in sorted(files.items()):
-            lang = meta.get("language", "")
-            size = meta.get("size_kb", 0)
-            console.print(
-                f"  [{ACCENT}]📄[/{ACCENT}]  [{DIM}]{path}[/{DIM}]"
-                f"  [{DIM}]{lang} · {size}kb[/{DIM}]"
-            )
+        for item in sorted(workspace.rglob("*")):
+            parts = item.relative_to(workspace).parts
+            if any(p in CONFIG.BLOCKED_DIRS for p in parts):
+                continue
+            if item.is_file():
+                rel  = item.relative_to(workspace)
+                size = round(item.stat().st_size / 1024, 2)
+                console.print(
+                    f"  [{ACCENT}]📄[/{ACCENT}]  [{DIM}]{rel}[/{DIM}]"
+                    f"  [{DIM}]{size}kb[/{DIM}]"
+                )
         console.print()
 
     def _goodbye(self) -> None:

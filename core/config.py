@@ -1,3 +1,5 @@
+# core/config.py
+
 import os
 from dotenv import load_dotenv
 
@@ -10,7 +12,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Models
-HUNTER_MODEL = "openrouter/hunter-alpha"
+HUNTER_MODEL  = "openrouter/hunter-alpha"
 MINIMAX_MODEL = "minimax/minimax-m2.5"
 
 # Paths
@@ -31,3 +33,18 @@ MINIMAX_MAX_OUTPUT_TOKENS = int(MINIMAX_CONTEXT_WINDOW * 0.15)  # 29491
 
 # File size limit
 MAX_FILE_SIZE_KB = 50000
+
+# Dirs to never scan or list
+BLOCKED_DIRS = {
+    "__pycache__", ".git", "node_modules",
+    ".venv", "venv", "sessions", ".mypy_cache",
+    ".pytest_cache", "dist", "build", ".idea"
+}
+
+# Files to never send to the model
+BLOCKED_FILES = {
+    ".env", ".env.local",
+    "*.key", "*.pem", "*.secret",
+    "id_rsa", "id_rsa.pub",
+    "credentials", "*.token"
+}

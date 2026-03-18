@@ -26,19 +26,10 @@ from core.types import (
 from utils.logger import logger
 
 
-# ── Orchestrator Agent ────────────────────────────────────────────────────────
-
 class Orchestrator(BaseAgent):
 
     def __init__(self, llm: Any) -> None:
         super().__init__(llm=llm, agent_name=AgentName.ORCHESTRATOR)
-
-        # injected by dispatcher when tools are ready
-        # self._explorer_fn    = None
-        # self._coder_fn       = None
-        # self._test_runner_fn = None
-
-    # ── system_prompt ─────────────────────────────────────────────────────────
 
     @property
     def system_prompt(self) -> str:
@@ -51,31 +42,28 @@ class Orchestrator(BaseAgent):
             "YOUR SPECIALISTS:\n"
             "  explorer  — reads files, searches code, explains structure. No side effects.\n"
             "  coder     — writes new files or edits existing ones. Needs explorer context first.\n"
-            "  runner    — runs tests on code the coder just wrote. Only after coder.\n"
             "\n"
             "DECIDING WHICH AGENTS TO USE:\n"
             "\n"
             "  READ / SEARCH / EXPLAIN tasks  (explorer only)\n"
             "    Signals: 'explain', 'what does', 'how does', 'find', 'search',\n"
             "             'show me', 'list', 'where is', 'read', 'understand'\n"
-            "    Use: explorer only. No coder. No runner.\n"
+            "    Use: explorer only. No coder.\n"
             "    Example: 'explain how authentication works'\n"
             "             → explorer reads the auth files and explains.\n"
             "\n"
-            "  WRITE / IMPLEMENT / FIX tasks  (explorer + coder + runner)\n"
+            "  WRITE / IMPLEMENT / FIX tasks  (explorer + coder)\n"
             "    Signals: 'add', 'create', 'implement', 'write', 'build',\n"
             "             'fix', 'refactor', 'edit', 'update', 'change'\n"
-            "    Use: explorer first, then coder, then runner.\n"
+            "    Use: explorer first, then coder.\n"
             "    Example: 'add a /health endpoint'\n"
-            "             → explorer reads app, coder writes code, runner tests it.\n"
+            "             → explorer reads app, coder writes code.\n"
             "\n"
-            "  MIXED tasks  (explorer + coder + runner)\n"
-            "    When in doubt, include all three.\n"
+            "  MIXED tasks  (explorer + coder)\n"
+            "    When in doubt, include both.\n"
             "\n"
             "RULES (always apply):\n"
             "  - explorer ALWAYS runs before coder.\n"
-            "  - runner ALWAYS runs after coder, never before.\n"
-            "  - Never include runner without coder.\n"
             "  - Never include coder without explorer before it.\n"
             "  - Digest explorer output yourself — never forward it raw to coder.\n"
             "\n"
@@ -86,8 +74,7 @@ class Orchestrator(BaseAgent):
             '    "reasoning": "one sentence explaining your plan",\n'
             '    "steps": [\n'
             '      {"agent": "explorer", "instruction": "specific instruction"},\n'
-            '      {"agent": "coder",    "instruction": "specific instruction"},\n'
-            '      {"agent": "runner",   "instruction": "run tests on changed files"}\n'
+            '      {"agent": "coder",    "instruction": "specific instruction"}\n'
             "    ]\n"
             "  }\n"
             "\n"
@@ -101,7 +88,6 @@ class Orchestrator(BaseAgent):
 
     @property
     def tools(self) -> List[Any]:
-        # no tools yet — list_workspace will be added in the next task
         return []
 
     def build_todos(self, task: Task) -> TodoList:
@@ -117,33 +103,24 @@ class Orchestrator(BaseAgent):
     # ── plan() ────────────────────────────────────────────────────────────────
 
     def plan(self, user_request: str, session_history: List[str] = []) -> Plan:
-        # asks Hunter to build an ordered Plan from the user request
-        # called by loop.py at the start of every user turn
         history_text = "\n".join(session_history[-10:]) if session_history else ""
-
         prompt = (
             f"User request: {user_request}\n\n"
             + (f"Recent history:\n{history_text}\n\n" if history_text else "")
             + "Build a plan. Return JSON only — no other text."
         )
-
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=prompt),
         ]
-
         response = self.llm.invoke(messages)
         content  = response.content if isinstance(response, AIMessage) else str(response)
-
         logger.info("Orchestrator: plan built")
         return self._parse_plan(content, user_request)
 
     # ── digest() ──────────────────────────────────────────────────────────────
 
     def digest(self, explorer_result: TaskResult, original_request: str) -> str:
-        # rewrites Explorer's raw findings into a clean Coder instruction
-        # coder never sees raw Explorer output — only Orchestrator's digest
-        # called by loop.py after Explorer finishes
         prompt = (
             f"Original user request:\n{original_request}\n\n"
             f"Explorer findings:\n{explorer_result['output']}\n\n"
@@ -153,14 +130,19 @@ class Orchestrator(BaseAgent):
             "  - Which files to edit and what changes to make\n"
             "  - What the code must do\n"
             "  - Any patterns or conventions to follow from the existing code\n"
+            "\n"
+            "IMPORTANT RULES FOR CODER INSTRUCTION:\n"
+            "  - If the file already exists → tell Coder to use edit_file, never write_file\n"
+            "  - If the file does not exist → tell Coder to use write_file\n"
+            "  - Always preserve existing code — only add or change what is needed\n"
+            "  - Include the exact location in the file where the change must be made\n"
+            "\n"
             "Write the Coder instruction only. No other text."
         )
-
         messages = [
             SystemMessage(content="You are the Orchestrator. Write a precise Coder instruction."),
             HumanMessage(content=prompt),
         ]
-
         response = self.llm.invoke(messages)
         logger.info("Orchestrator: digest done")
         return response.content.strip() if isinstance(response, AIMessage) else str(response)
@@ -169,73 +151,34 @@ class Orchestrator(BaseAgent):
 
     def summarize(
         self,
-        user_request: str,
+        user_request : str,
         all_results  : List[TaskResult],
         tests_passed : bool,
     ) -> str:
-        # writes the final human-readable answer shown to the user
-        # called by synthesizer.py after all tasks complete
         results_text = "\n\n".join(
             f"[{r['task']['agent'].upper()}]:\n{r['output']}"
             for r in all_results
         )
-
         prompt = (
             f"User request: {user_request}\n\n"
             f"Results from all agents:\n{results_text}\n\n"
-            f"Tests {'passed ✅' if tests_passed else 'failed ❌'}.\n\n"
             "Write a clear, concise summary for the user:\n"
             "  - What was done\n"
             "  - Which files were created or changed\n"
-            "  - Test result\n"
             "  - What to do next (if anything)\n"
             "Speak directly to the user. Be concise."
         )
-
         messages = [
             SystemMessage(content="You are the Orchestrator. Write the final answer for the user."),
             HumanMessage(content=prompt),
         ]
-
         response = self.llm.invoke(messages)
         logger.info("Orchestrator: summarize done")
         return response.content.strip() if isinstance(response, AIMessage) else str(response)
 
-    # ── replan() — uncomment in Task 3 when retry controller is ready ─────────
-
-    # def replan(
-    #     self,
-    #     original_request: str,
-    #     failed_output    : str,
-    #     test_errors      : str,
-    #     attempt_number   : int,
-    # ) -> Plan:
-    #     prompt = (
-    #         f"User request: {original_request}\n\n"
-    #         f"Coder produced this code:\n{failed_output}\n\n"
-    #         f"Tests failed with:\n{test_errors}\n\n"
-    #         f"This is attempt {attempt_number}.\n"
-    #         + (
-    #             "Decide: do you need more context (run Explorer again) "
-    #             "or just fix the code directly?\n"
-    #             if attempt_number == 1
-    #             else "Fix the code directly — no need to explore again.\n"
-    #         )
-    #         + "Return a JSON plan. explorer steps before coder steps. runner last."
-    #     )
-    #     messages = [
-    #         SystemMessage(content=self.system_prompt),
-    #         HumanMessage(content=prompt),
-    #     ]
-    #     response = self.llm.invoke(messages)
-    #     content  = response.content if isinstance(response, AIMessage) else str(response)
-    #     return self._parse_plan(content, original_request)
-
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _parse_plan(self, llm_output: str, original_request: str) -> Plan:
-        # parses the LLM's JSON plan output into a Plan TypedDict
-        # falls back to a safe default plan if parsing fails
         text = llm_output.strip()
         if text.startswith("```"):
             lines = text.split("\n")
@@ -251,7 +194,7 @@ class Orchestrator(BaseAgent):
                     context     = "",
                 )
                 for step in steps
-                if step.get("agent") in ("explorer", "coder", "runner")
+                if step.get("agent") in ("explorer", "coder")
             ]
             tasks = self._enforce_order(tasks)
             return Plan(steps=tasks)
@@ -264,9 +207,7 @@ class Orchestrator(BaseAgent):
             ])
 
     def _enforce_order(self, tasks: List[Task]) -> List[Task]:
-        # guarantees explorer → coder → runner order
         explorers = [t for t in tasks if t["agent"] == "explorer"]
         coders    = [t for t in tasks if t["agent"] == "coder"]
-        runners   = [t for t in tasks if t["agent"] == "runner"]
-        others    = [t for t in tasks if t["agent"] not in ("explorer", "coder", "runner")]
-        return explorers + coders + runners + others
+        others    = [t for t in tasks if t["agent"] not in ("explorer", "coder")]
+        return explorers + coders + others

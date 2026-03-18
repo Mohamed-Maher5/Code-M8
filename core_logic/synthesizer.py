@@ -1,6 +1,6 @@
 # core_logic/synthesizer.py
 # Collects Explorer and Coder results → builds final answer
-# Runner excluded. Trims outputs before summarize to avoid slow huge prompts.
+# Trims outputs before summarize to avoid slow huge prompts
 
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ from utils.logger import logger
 if TYPE_CHECKING:
     from core_logic.dispatcher import OrchestratorAgent
 
-# max chars from each agent output sent to summarize()
-# prevents slow responses caused by sending full file contents to the LLM
 MAX_OUTPUT_CHARS = 800
 
 
@@ -35,8 +33,8 @@ class Synthesizer:
         user_request: str,
         all_results : List[TaskResult],
     ) -> str:
-        # step 1 — exclude runner results
-        results = [r for r in all_results if r["task"]["agent"] != "runner"]
+        results = all_results
+
         if not results:
             return "No results to show."
 
@@ -48,21 +46,16 @@ class Synthesizer:
             f"{len(coder_results)} coder results"
         )
 
-        # step 2 — trim outputs before passing to summarize
-        # full file contents from Explorer can be thousands of lines
-        # summarize only needs key findings, not raw file dumps
         trimmed = []
         for r in results:
-            t          = dict(r)
+            t           = dict(r)
             t["output"] = r["output"][:MAX_OUTPUT_CHARS]
             if len(r["output"]) > MAX_OUTPUT_CHARS:
                 t["output"] += "\n... [trimmed]"
             trimmed.append(t)
 
-        # step 3 — update status before summarize LLM call
         _set_status("orchestrator", "writing answer")
 
-        # step 4 — call orchestrator.summarize()
         try:
             response = self.orchestrator.summarize(
                 user_request = user_request,
@@ -80,7 +73,6 @@ class Synthesizer:
         explorer_results: List[TaskResult],
         coder_results   : List[TaskResult],
     ) -> str:
-        # stitch raw outputs if summarize() fails — never returns blank
         parts = []
         for r in explorer_results + coder_results:
             out = r["output"].strip()
