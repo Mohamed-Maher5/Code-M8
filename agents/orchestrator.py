@@ -122,23 +122,30 @@ class Orchestrator(BaseAgent):
 
     def digest(self, explorer_result: TaskResult, original_request: str) -> str:
         prompt = (
-            f"Original user request:\n{original_request}\n\n"
-            f"Explorer findings:\n{explorer_result['output']}\n\n"
-            "Based on the findings above, write a precise instruction for the Coder.\n"
-            "The instruction must say exactly:\n"
-            "  - Which files to create\n"
-            "  - Which files to edit and what changes to make\n"
-            "  - What the code must do\n"
-            "  - Any patterns or conventions to follow from the existing code\n"
-            "\n"
-            "IMPORTANT RULES FOR CODER INSTRUCTION:\n"
-            "  - If the file already exists → tell Coder to use edit_file, never write_file\n"
-            "  - If the file does not exist → tell Coder to use write_file\n"
-            "  - Always preserve existing code — only add or change what is needed\n"
-            "  - Include the exact location in the file where the change must be made\n"
-            "\n"
-            "Write the Coder instruction only. No other text."
-        )
+    f"Original user request:\n{original_request}\n\n"
+    f"Explorer findings:\n{explorer_result['output']}\n\n"
+    "Based on the findings above, write a precise instruction for the Coder.\n"
+    "The instruction must say exactly:\n"
+    "  - Which files to create, including the exact filename and extension\n"
+    "  - Which files to edit and what changes to make\n"
+    "  - What the code must do\n"
+    "  - Any patterns or conventions to follow from the existing code\n"
+    "\n"
+    "IMPORTANT RULES FOR CODER INSTRUCTION:\n"
+    "  - If the file already exists → tell Coder to use edit_file, never write_file\n"
+    "  - If the file does not exist → tell Coder to use write_file\n"
+    "  - Always state the file type explicitly (e.g. .py, .js, .html, .json, .yaml)\n"
+    "  - If the user did not specify a file type, infer the correct extension from context:\n"
+    "      * Python project → .py\n"
+    "      * Web frontend → .html / .css / .js\n"
+    "      * Config or data → .json or .yaml\n"
+    "      * Documentation → .md\n"
+    "  - If the file is binary (image, PDF, compiled asset) → tell Coder to use write_file with is_base64=True\n"
+    "  - Always preserve existing code — only add or change what is needed\n"
+    "  - Include the exact location in the file where the change must be made\n"
+    "\n"
+    "Write the Coder instruction only. No other text."
+)
         messages = [
             SystemMessage(content="You are the Orchestrator. Write a precise Coder instruction."),
             HumanMessage(content=prompt),

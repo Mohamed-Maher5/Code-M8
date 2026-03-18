@@ -58,7 +58,7 @@ _minimax_llm = ChatOpenAI(
 
 _orchestrator = Orchestrator(llm=_hunter_llm)
 _explorer     = Explorer(llm=_hunter_llm)
-_coder        = Coder(llm=_minimax_llm)
+_coder        = Coder(llm=_hunter_llm)
 
 _dispatcher  = Dispatcher(
     orchestrator = _orchestrator,

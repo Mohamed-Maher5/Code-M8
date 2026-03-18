@@ -36,9 +36,9 @@ def print_plan(plan: Plan) -> None:
     steps = plan["steps"]
     print(f"\n  📋 Plan — {len(steps)} step{'s' if len(steps) > 1 else ''}:")
     for i, step in enumerate(steps, 1):
-        instr = step["instruction"][:70]
-        dots  = "..." if len(step["instruction"]) > 70 else ""
-        print(f"     {i}. [{step['agent'].upper()}] {instr}{dots}")
+        instr = step["instruction"]
+        dots  = "..." if len(step["instruction"]) > 600 else ""
+        print(f"     {i}. [{step['agent'].upper()}] {instr}")
     print()
 
 

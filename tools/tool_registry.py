@@ -10,7 +10,7 @@ from tools.search_code import search_code
 from tools.web_search  import web_search
 
 # Coder tools — write only
-CODER_TOOLS = [write_file, edit_file]
+CODER_TOOLS = [write_file, edit_file,read_file]
 
 # Explorer tools — read + web
 EXPLORER_TOOLS = [read_file, list_files, search_code, web_search]

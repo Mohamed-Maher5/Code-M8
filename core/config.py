@@ -48,3 +48,12 @@ BLOCKED_FILES = {
     "id_rsa", "id_rsa.pub",
     "credentials", "*.token"
 }
+
+
+TEXT_EXTENSIONS = {
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".htm", ".css", ".scss",
+    ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".env",
+    ".md", ".txt", ".rst", ".csv", ".xml", ".sql", ".sh", ".bash",
+    ".c", ".cpp", ".h", ".java", ".go", ".rs", ".rb", ".php",
+    ".gitignore", ".dockerfile", ".makefile", ""
+}

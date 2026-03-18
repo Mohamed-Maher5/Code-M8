@@ -131,6 +131,9 @@ class BaseAgent(ABC):
 
             if node_name == "llm" and state.get("messages"):
                 last_msg = state["messages"][-1]
+                #################################
+                logger.info(f"there is my output man{last_msg}")
+                #########################################3
                 if hasattr(last_msg, "content") and last_msg.content:
                     if not getattr(last_msg, "tool_calls", None):
                         output = last_msg.content.strip()
