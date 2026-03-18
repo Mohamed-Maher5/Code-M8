@@ -17,8 +17,6 @@
 # task     = make_task("coder", "tell me files about api and backend  and explain what it does and if you dont found it tell what is there in dir then make call it maher.py then do hello world code in it ")
 # result   = coder.run(task)
 # print(result["output"])
-
-
 # Entry point — boots Code M8 and starts the terminal UI
 
 from core_logic.loop import run_turn

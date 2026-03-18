@@ -1,11 +1,17 @@
+
+
 """
 base_agent.py
 =============
 Abstract base class for all agents.
-Follows the ReAct pattern from the reference files.
 
-Graph:
-    START → llm_node → (tool calls?) → tool_node → llm_node → END
+Internals use deepagents create_deep_agent + FilesystemBackend.
+The external interface is identical — dispatcher.py only calls .run(task).
+
+Each subclass defines:
+    system_prompt  — who the agent is and what rules it follows
+    tools          — list of LangChain @tool functions
+    build_todos()  — step list for a given task (injected into system prompt)
 """
 
 from __future__ import annotations
@@ -15,24 +21,19 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Annotated, Any, List, Optional
+from typing import Any, List
 
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-)
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from deepagents import create_deep_agent
+from deepagents.backends import FilesystemBackend
 
-from core.types import AgentName, Task, TaskResult, ToolResult, make_task_result
+from core.config import WORKSPACE_PATH
+from core.types import Task, TaskResult, make_task_result
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TODO LIST
+# Injected into system_prompt so deepagents tracks steps via write_todos tool
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TodoStatus(str, Enum):
@@ -80,7 +81,7 @@ class TodoList:
         return sum(1 for i in self.items if i.status == TodoStatus.PENDING)
 
     def as_text(self) -> str:
-        """Injected into system prompt so the LLM tracks its own progress."""
+        """Injected into system prompt so the agent tracks its own progress."""
         if not self.items:
             return ""
         icons = {
@@ -96,258 +97,132 @@ class TodoList:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AGENT STATE  (matches reference files exactly)
-# ══════════════════════════════════════════════════════════════════════════════
-
-class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # BASE AGENT
 # ══════════════════════════════════════════════════════════════════════════════
 
 class BaseAgent(ABC):
     """
-    All agents inherit from here.
+    All agents (Explorer, Coder, Orchestrator) inherit from here.
 
-    Provides the ReAct LangGraph loop:
-        START → llm → (tool calls?) → tools → llm → END
+    Internally uses deepagents create_deep_agent with FilesystemBackend.
+    FilesystemBackend confines all file I/O to WORKSPACE_PATH automatically.
 
-    Each subclass must implement:
-        system_prompt  — who the agent is and what it does
-        tools          — list of LangChain @tool functions it can use
-        build_todos()  — what steps it needs for a given task
+    External interface is unchanged:
+        agent.run(task) → TaskResult
+    Dispatcher never knows what is underneath.
     """
 
-    def __init__(self, llm: Any, agent_name: AgentName) -> None:
-        self.llm   = llm
-        self.name  = agent_name
-        self._graph = self._build_graph()
+    def __init__(self, llm: Any, agent_name: Any = None) -> None:
+        self.llm      = llm
+        self.name     = agent_name
+        self._backend = FilesystemBackend(
+            root_dir     = WORKSPACE_PATH,
+            virtual_mode = True,   # blocks path traversal outside workspace
+        )
+        # Graph is built lazily on first run() call
+        # because tools and system_prompt are abstract (not available yet at init)
+        self._graph = None
 
-    # ── Abstract ──────────────────────────────────────────────────────────────
+    # ── Abstract — subclasses MUST implement these ────────────────────────────
 
     @property
     @abstractmethod
     def system_prompt(self) -> str:
+        """The agent's identity and rules."""
         ...
 
     @property
     @abstractmethod
     def tools(self) -> List[Any]:
+        """LangChain @tool functions this agent can use."""
         ...
 
     @abstractmethod
     def build_todos(self, task: Task) -> TodoList:
+        """Step list for this task — injected into system prompt."""
         ...
 
-    # ── run() — only method dispatcher calls ──────────────────────────────────
+    # ── run() — only method dispatcher.py ever calls ──────────────────────────
 
-    # def run(self, task: Task) -> TaskResult:
-    #     """Run the task through the LangGraph and return a TaskResult."""
-    #     start_time = time.time()
-
-    #     todos       = self.build_todos(task)
-    #     full_system = self._build_system_with_todos(todos)
-
-    #     # Build starting messages
-    #     history  = task.get("context", "")
-    #     messages: List[BaseMessage] = [SystemMessage(content=full_system)]
-    #     if history:
-    #         messages.append(HumanMessage(content=f"Context:\n{history}"))
-    #     messages.append(HumanMessage(content=task["instruction"]))
-
-    #     # Run the graph
-    #     final_state = self._graph.invoke({"messages": messages})
-
-    #     # Extract final text from last AIMessage
-    #     output = ""
-    #     for msg in reversed(final_state["messages"]):
-    #         if isinstance(msg, AIMessage) and isinstance(msg.content, str) and msg.content.strip():
-    #             output = msg.content.strip()
-    #             break
-
-    #     duration_ms = int((time.time() - start_time) * 1000)
-
-    #     return make_task_result(task=task, output=output, success=True)
     def run(self, task: Task) -> TaskResult:
-     start_time = time.time()
-     task["status"] = "running"
+        """
+        Execute a task and return a TaskResult.
+        Builds the deepagents graph on first call (lazy init).
+        """
+        start_time = time.time()
 
-     todos       = self.build_todos(task)
-     full_system = self._build_system_with_todos(todos)
+        # Build the deepagents graph if not built yet
+        if self._graph is None:
+            self._graph = self._build_graph()
 
-     messages = [SystemMessage(content=full_system)]
-     if task.get("context"):
-        messages.append(HumanMessage(content=f"Context:\n{task['context']}"))
-     messages.append(HumanMessage(content=task["instruction"]))
+        # Build todos and inject into system prompt
+        todos       = self.build_todos(task)
+        full_system = self._build_system_with_todos(todos)
 
-     output = ""
+        # Build starting messages
+        messages = [SystemMessage(content=full_system)]
+        if task.get("context"):
+            messages.append(HumanMessage(content=f"Context:\n{task['context']}"))
+        messages.append(HumanMessage(content=task["instruction"]))
 
-     # Stream instead of invoke — get state after every node
-     for chunk in self._graph.stream({"messages": messages}):
+        output = ""
 
-        # chunk is a dict: {"node_name": state_update}
-        node_name = list(chunk.keys())[0]
-        state     = chunk[node_name]
+        # Stream the graph — print live tool calls and thinking
+        for chunk in self._graph.stream(
+            {"messages": messages},
+            config      = {"configurable": {"thread_id": uuid.uuid4().hex}},
+            stream_mode = "values",
+        ):
+            msgs = chunk.get("messages", [])
+            if not msgs:
+                continue
 
-        # After tool node — a tool just ran, print what happened
-        if node_name == "tools" and state.get("messages"):
-            last_msg = state["messages"][-1]
-            if hasattr(last_msg, "name"):
-                print(f"  🔧 Tool ran: {last_msg.name}")
+            last_msg = msgs[-1]
 
-        # After llm node — check if it is the final answer
-        if node_name == "llm" and state.get("messages"):
-            last_msg = state["messages"][-1]
-            if hasattr(last_msg, "content") and last_msg.content:
-                if not getattr(last_msg, "tool_calls", None):
-                    output = last_msg.content.strip()
-                    print(f"  💬 Agent answered")
+            # Tool call about to run
+            if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                for tc in last_msg.tool_calls:
+                    print(f"\n  📌 Will call: {tc['name']}")
 
-     duration_ms = int((time.time() - start_time) * 1000)
-     return make_task_result(task=task, output=output, success=True)
+            # Tool result came back
+            elif hasattr(last_msg, "tool_call_id"):
+                name = getattr(last_msg, "name", "tool")
+                print(f"  ✅ Done: {name}")
 
+            # Final text answer
+            elif isinstance(last_msg, AIMessage):
+                if isinstance(last_msg.content, str) and last_msg.content.strip():
+                    if not getattr(last_msg, "tool_calls", None):
+                        output = last_msg.content.strip()
+                        print(f"  💬 Agent answered")
 
-    
-
-
-
-
-
-
-
-
-
-
-
-    
-
-    # ── LangGraph nodes ───────────────────────────────────────────────────────
-
-    # def _llm_node(self, state: AgentState) -> dict:
-    #     """Calls the LLM. Returns text or tool call request."""
-    #     bound = self.llm.bind_tools(self.tools) if self.tools else self.llm
-    #     response = bound.invoke(state["messages"])
-    #     return {"messages": [response]}
-
-    def _tool_node(self, state: AgentState) -> dict:
-     last     = state["messages"][-1]
-     tool_map = {t.name: t for t in self.tools}
-     results  = []
-
-     for tc in last.tool_calls:
-        tool_fn = tool_map.get(tc["name"])
-
-        # Print before
-        print(f"\n  ⚙️  Running: {tc['name']}({list(tc.get('args', {}).keys())})")
-
-        if tool_fn is None:
-            output  = f"ERROR: unknown tool '{tc['name']}'"
-            success = False
-        else:
-            try:
-                output  = tool_fn.invoke(tc.get("args", {}))
-                success = True
-            except Exception as e:
-                output  = f"ERROR: {e}"
-                success = False
-
-        # Print result status
-        # icon = "✅" if success else "❌"
-        # print(f"  {icon} Done: {tc['name']}")
-        if success:
-             icon = "✅"
-             print(f"  {icon} Done: {tc['name']}")
-        else:
-            icon = "❌"
-            print(f"  {icon} fail: {tc['name']}")
-
-
-
-        
-        results.append(ToolMessage(
-            content      = str(output),
-            tool_call_id = tc["id"],
-            name         = tc["name"],
-        ))
-
-     return {"messages": results}
-
-
-
-    def _llm_node(self, state: AgentState) -> dict:
-     # Show thinking indicator
-     msgs = state["messages"]
-     print(f"\n  🧠 Thinking... ({len(msgs)} messages in context)")
-
-     bound    = self.llm.bind_tools(self.tools) if self.tools else self.llm
-     response = bound.invoke(msgs)
-
-     # If requesting a tool — show what it will do next
-     if getattr(response, "tool_calls", None):
-        for tc in response.tool_calls:
-            print(f"  📌 Will call: {tc['name']}")
-
-     return {"messages": [response]}
-
-
-
-
-
-
-
-
-    # def _tool_node(self, state: AgentState) -> dict:
-    #     """Executes the tool the LLM requested. Returns ToolMessage."""
-    #     last     = state["messages"][-1]
-    #     tool_map = {t.name: t for t in self.tools}
-    #     results: List[ToolMessage] = []
-
-    #     for tc in last.tool_calls:
-    #         tool_fn = tool_map.get(tc["name"])
-    #         if tool_fn is None:
-    #             output = f"ERROR: unknown tool '{tc['name']}'"
-    #         else:
-    #             try:
-    #                 output = tool_fn.invoke(tc.get("args", {}))
-    #             except Exception as e:
-    #                 output = f"ERROR: {e}"
-
-    #         results.append(ToolMessage(
-    #             content      = str(output),
-    #             tool_call_id = tc["id"],
-    #             name         = tc["name"],
-    #         ))
-
-    #     return {"messages": results}
-
-    # ── Routing ───────────────────────────────────────────────────────────────
-
-    def _should_continue(self, state: AgentState) -> str:
-        """Tool calls → go to tools. Text response → END."""
-        last = state["messages"][-1]
-        if isinstance(last, AIMessage) and last.tool_calls:
-            return "tools"
-        return END
+        return make_task_result(task=task, output=output, success=True)
 
     # ── Graph builder ─────────────────────────────────────────────────────────
 
-    def _build_graph(self) -> Any:
-        g = StateGraph(AgentState)
-        g.add_node("llm",   self._llm_node)
-        g.add_node("tools", self._tool_node)
-        g.add_edge(START, "llm")
-        g.add_conditional_edges("llm", self._should_continue, {
-            "tools": "tools",
-            END:     END,
-        })
-        g.add_edge("tools", "llm")
-        return g.compile()
+    def _build_graph(self):
+        """
+        Builds the deepagents graph for this agent.
+        Called once on first run() — subclass tools and system_prompt
+        are available by then.
+
+        deepagents automatically provides:
+            write_todos  — manages the todo list
+            ls, read_file, write_file, edit_file, glob, grep — file ops
+            execute      — shell commands (via FilesystemBackend)
+        Plus any extra tools from self.tools.
+        """
+        return create_deep_agent(
+            model         = self.llm,
+            tools         = self.tools,
+            system_prompt = self.system_prompt,
+            backend       = self._backend,
+        )
 
     # ── Helper ────────────────────────────────────────────────────────────────
 
     def _build_system_with_todos(self, todos: TodoList) -> str:
+        """Appends the todo list to the system prompt."""
         base      = self.system_prompt.strip()
         todo_text = todos.as_text()
         if todo_text:
@@ -355,4 +230,4 @@ class BaseAgent(ABC):
         return base
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(agent={self.name.value!r})"
+        return f"{self.__class__.__name__}(llm={self.llm.__class__.__name__!r})"
