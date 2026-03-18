@@ -12,7 +12,7 @@ from utils.logger import logger
 if TYPE_CHECKING:
     from core_logic.dispatcher import OrchestratorAgent
 
-MAX_OUTPUT_CHARS = 800
+MAX_OUTPUT_CHARS = 2000
 
 
 def _set_status(agent: str, action: str) -> None:

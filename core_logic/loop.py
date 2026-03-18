@@ -26,6 +26,8 @@ from core_logic.synthesizer import Synthesizer
 from core_logic.planner     import validate_plan, print_plan, plan_summary, fallback_plan
 from utils.logger import logger
 
+from core.session_manager import save_turn, load_history
+
 
 # ── Status helper ─────────────────────────────────────────────────────────────
 
@@ -78,6 +80,7 @@ _session_history = []
 
 def run_turn(user_input: str) -> str:
     logger.info(f"Turn started: {user_input}")
+    history=load_history(last_n=5)
 
     # step 0 — classify
     message_type = _classify(user_input)
@@ -91,7 +94,7 @@ def run_turn(user_input: str) -> str:
     try:
         plan = _orchestrator.plan(
             user_request    = user_input,
-            session_history = _session_history[-10:],
+            session_history = history,
         )
     except Exception as e:
         logger.error(f"Plan error: {e}")
@@ -122,14 +125,23 @@ def run_turn(user_input: str) -> str:
         user_request = user_input,
         all_results  = all_results,
     )
+    save_turn(
+        user_message = user_input,
+        all_results  = all_results,
+        final_answer = response,
+    )
 
     # save history
-    _session_history.append(f"User: {user_input}")
-    _session_history.append(f"Assistant: {response[:300]}")
-    if len(_session_history) > 20:
-        _session_history[:] = _session_history[-20:]
+    # _session_history.append(f"User: {user_input}")
+    # _session_history.append(f"Assistant: {response[:300]}")
+    # if len(_session_history) > 20:
+    #     _session_history[:] = _session_history[-20:]
 
     logger.info("Turn completed")
+    
+
+
+
     return response
 
 
