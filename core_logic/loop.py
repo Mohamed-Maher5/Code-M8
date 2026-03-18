@@ -81,13 +81,13 @@ _session_history = []
 def run_turn(user_input: str) -> str:
     logger.info(f"Turn started: {user_input}")
     history=load_history(last_n=5)
-
+   
     # step 0 — classify
     message_type = _classify(user_input)
     logger.info(f"Message type: {message_type}")
 
     if message_type == "chat":
-        return _chat_reply(user_input)
+        return _chat_reply(user_input," ".join(history))
 
     # step 1 — orchestrator plans using session history only
     _set_status("orchestrator", "planning")
@@ -180,11 +180,11 @@ Reply naturally and briefly. Keep it under 2 sentences.
 If they ask what you do, explain you help developers read and write code."""
 
 
-def _chat_reply(user_input: str) -> str:
+def _chat_reply(user_input: str,his:str) -> str:
     try:
         response = _hunter_llm.invoke([
             SystemMessage(content=_CHAT_SYSTEM),
-            HumanMessage(content=user_input),
+            HumanMessage(content=user_input+his),
         ])
         return response.content.strip()
     except Exception:
