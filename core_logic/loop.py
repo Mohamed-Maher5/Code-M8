@@ -54,7 +54,7 @@ _hunter_llm = ChatOpenAI(
 
 _qwen_llm = ChatGroq(
     api_key   = GROQ_API_KEY,
-    
+    max_tokens=9000,
     model     = GROQ_MODEL,
     streaming = True,
     model_kwargs={"include_reasoning": False},
