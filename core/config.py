@@ -12,8 +12,17 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Models
-HUNTER_MODEL  = "openrouter/hunter-alpha"
+HUNTER_MODEL  = "qwen/qwen3-coder:free"
 MINIMAX_MODEL = "minimax/minimax-m2.5"
+
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3-32b")  # or mixtral-8x7b-32768, gemma2-9b-it
+GROQ_MAX_OUTPUT_TOKENS = 10000
+
+
+
+
 
 # Paths
 WORKSPACE_PATH = "./workspace"
@@ -22,6 +31,17 @@ SESSIONS_PATH  = "./sessions"
 # Model context limits
 HUNTER_CONTEXT_WINDOW  = 1_000_000   # hunter-alpha
 MINIMAX_CONTEXT_WINDOW = 196_608     # minimax-m2.5
+
+
+QWEN_CONTEXT_WINDOW    = 262_144
+MINIMAX_CONTEXT_WINDOW = 196_608
+
+# Qwen limits
+QWEN_MAX_TOKENS        = int(QWEN_CONTEXT_WINDOW * 0.80)
+QWEN_MAX_OUTPUT_TOKENS = int(QWEN_CONTEXT_WINDOW * 0.15)
+
+
+
 
 # Hunter limits — Orchestrator + Explorer
 HUNTER_MAX_TOKENS        = int(HUNTER_CONTEXT_WINDOW * 0.80)   # 800000

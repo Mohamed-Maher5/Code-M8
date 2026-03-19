@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 
 from agents.coder        import Coder
 from agents.explorer     import Explorer
@@ -20,6 +21,9 @@ from core.config import (
     MINIMAX_MODEL,
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
+    GROQ_API_KEY,
+    GROQ_MODEL,
+    
 )
 from core_logic.dispatcher  import Dispatcher
 from core_logic.synthesizer import Synthesizer
@@ -48,19 +52,22 @@ _hunter_llm = ChatOpenAI(
     streaming = True,
 )
 
-_minimax_llm = ChatOpenAI(
-    api_key   = OPENROUTER_API_KEY,
-    base_url  = OPENROUTER_BASE_URL,
-    model     = MINIMAX_MODEL,
+_qwen_llm = ChatGroq(
+    api_key   = GROQ_API_KEY,
+    
+    model     = GROQ_MODEL,
     streaming = True,
+    model_kwargs={"include_reasoning": False},
 )
+
+
 
 
 # ── Agents ────────────────────────────────────────────────────────────────────
 
-_orchestrator = Orchestrator(llm=_hunter_llm)
-_explorer     = Explorer(llm=_hunter_llm)
-_coder        = Coder(llm=_hunter_llm)
+_orchestrator = Orchestrator(llm=_qwen_llm)
+_explorer     = Explorer(llm=_qwen_llm)
+_coder        = Coder(llm=_qwen_llm)
 
 _dispatcher  = Dispatcher(
     orchestrator = _orchestrator,
@@ -162,7 +169,7 @@ Reply with a single word: task or chat. Nothing else."""
 
 def _classify(user_input: str) -> str:
     try:
-        response = _hunter_llm.invoke([
+        response = _qwen_llm.invoke([
             SystemMessage(content=_CLASSIFIER_SYSTEM),
             HumanMessage(content=user_input),
         ])
@@ -182,7 +189,7 @@ If they ask what you do, explain you help developers read and write code."""
 
 def _chat_reply(user_input: str,his:str) -> str:
     try:
-        response = _hunter_llm.invoke([
+        response = _qwen_llm.invoke([
             SystemMessage(content=_CHAT_SYSTEM),
             HumanMessage(content=user_input+his),
         ])
