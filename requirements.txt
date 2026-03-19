@@ -12,6 +12,7 @@ distro==1.9.0
 duckduckgo-search==8.1.1
 frozenlist==1.8.0
 greenlet==3.3.2
+groq==0.37.1
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
@@ -24,6 +25,7 @@ langchain==1.2.12
 langchain-classic==1.0.3
 langchain-community==0.4.1
 langchain-core==1.2.19
+langchain-groq==1.1.2
 langchain-openai==1.1.11
 langchain-text-splitters==1.1.1
 langgraph==1.1.2

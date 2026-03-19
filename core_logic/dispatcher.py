@@ -112,7 +112,6 @@ class Dispatcher:
                     destination = "unknown",
                     reason      = f"Unknown agent '{agent_name}' in plan.",
                 )
-        logger.info(f"results:::::::::{all_results}")    
 
         return all_results
 
