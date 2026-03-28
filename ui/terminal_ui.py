@@ -121,6 +121,46 @@ class TerminalUI:
             console.print(f"  [{WARN}]Session cleared.[/{WARN}]")
         elif action == "show_session":
             console.print(f"  [{DIM}]Turn {self.turn} · workspace: {WORKSPACE_PATH}[/{DIM}]")
+        elif action == "graph_clear":
+            self._graph_clear()
+        # Graph indexing is now automatic - no user-facing commands
+
+    def _graph_clear(self) -> None:
+        """Clear all data from graph database with confirmation."""
+        console.print()
+        console.print(Panel(
+            Align.center(
+                "[bold red]⚠️  WARNING: This will delete ALL indexed data from the graph database.[/bold red]\n\n"
+                "[dim]• All File nodes will be deleted[/dim]\n"
+                "[dim]• All Chunk nodes will be deleted[/dim]\n"
+                "[dim]• All embeddings will be deleted[/dim]\n"
+                "[dim]• Next request will take 30+ seconds (full re-index)[/dim]\n\n"
+                "[bold yellow]Type 'yes' to confirm, or press Enter to cancel:[/bold yellow]"
+            ),
+            title="[bold red]⚠️  CONFIRM GRAPH CLEAR  ⚠️[/bold red]",
+            border_style="red",
+            padding=(1, 2)
+        ))
+        
+        try:
+            from prompt_toolkit import prompt
+            from prompt_toolkit.styles import Style
+            
+            confirm = prompt(
+                "> ",
+                style=Style.from_dict({"": "ansired bold"}),
+            ).strip().lower()
+            
+            if confirm == "yes":
+                from context.graph_index import clear_graph_index
+                msg = clear_graph_index()
+                console.print(f"\n  [{SUCCESS}]{msg}[/{SUCCESS}]\n")
+            else:
+                console.print(f"\n  [{DIM}]Graph clear cancelled.[/{DIM}]\n")
+        except EOFError:
+            console.print(f"\n  [{DIM}]Graph clear cancelled.[/{DIM}]\n")
+        except Exception as e:
+            console.print(f"\n  [{ERROR}]Error: {e}[/{ERROR}]\n")
 
     def start(self) -> None:
         create_session()
@@ -202,13 +242,14 @@ class TerminalUI:
 
     def _show_help(self) -> None:
         table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column(width=12)
+        table.add_column(width=14)
         table.add_column(width=2, justify="center")
         table.add_column()
         for cmd, desc in [
             ("/files",   "list workspace files"),
             ("/reset",   "clear session history"),
             ("/session", "show session info"),
+            ("/graph-clear", "⚠️ wipe graph DB (full re-index next time)"),
             ("/help",    "show this help"),
             ("/exit",    "quit"),
         ]:

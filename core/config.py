@@ -26,6 +26,10 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3-32b")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
+# Optional graph RAG (Neo4j): set NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD in .env
+# (loaded in context.graph_config). Graph indexing is automatic - the coding agent
+# indexes *.py files under WORKSPACE_PATH when needed.
+
 WORKSPACE_PATH = "./workspace"
 SESSIONS_PATH  = "./sessions"
 

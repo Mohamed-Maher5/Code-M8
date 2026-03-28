@@ -1,13 +1,14 @@
 # agents/explorer.py
 # Explorer agent — reads files and returns findings to the Orchestrator
 # Model  : Hunter Alpha via OpenRouter
-# Tools  : read_file, list_files, search_code, web_search — imported from tools/
+# Tools  : read_file, list_files, web_search — from tools/
 
 from __future__ import annotations
 
 from typing import Any, List
 
 from agents.base_agent import BaseAgent, TodoList
+from core.config import WORKSPACE_PATH
 from core.types import AgentName, Task
 from tools.tool_registry import EXPLORER_TOOLS
 
@@ -16,6 +17,23 @@ class Explorer(BaseAgent):
 
     def __init__(self, llm: Any) -> None:
         super().__init__(llm=llm, agent_name=AgentName.EXPLORER)
+        self._indexed: bool = False
+
+    def _ensure_indexed(self) -> None:
+        """Auto-index workspace before reading codebase.
+        
+        This ensures the graph RAG index is available for semantic search
+        when exploring the codebase. Only triggers once per session.
+        """
+        if self._indexed:
+            return
+        
+        try:
+            from tools.auto_index import auto_index_workspace
+            auto_index_workspace.invoke({"workspace_path": WORKSPACE_PATH})
+            self._indexed = True
+        except Exception:
+            pass  # Silently ignore if graph RAG not configured
 
     @property
     def system_prompt(self) -> str:
@@ -29,12 +47,21 @@ class Explorer(BaseAgent):
         "TOOLS YOU HAVE:\n"
         "  - list_files  — use this first to see what files exist\n"
         "  - read_file   — use this to read a specific file\n"
+        "  - web_search  — use this for external information\n"
+        "  - graph_code_search — semantic search over indexed Python code\n"
         "\n"
         "YOU DO NOT HAVE search_code. DO NOT attempt to call it.\n"
         "To find a pattern or function inside a file:\n"
         "  1. Call list_files to find the right file\n"
         "  2. Call read_file on that file\n"
         "  3. Identify the pattern yourself from the file content\n"
+        "\n"
+        "WHEN TO USE graph_code_search:\n"
+        "  - User asks \"where is X?\" or \"find X\"\n"
+        "  - User asks \"how does X work?\"\n"
+        "  - User wants to understand architecture or patterns\n"
+        "  - You need to find related code across multiple files\n"
+        "  Use graph_code_search FIRST, then read_file for details.\n"
         "\n"
         "FILE TYPE RULES:\n"
         "  - Only read files with code extensions: "
@@ -49,7 +76,7 @@ class Explorer(BaseAgent):
         "at zero indentation\n"
         "\n"
         "RULES:\n"
-        "  - You ONLY use read_file and list_files\n"
+        "  - You use read_file, list_files, graph_code_search, and web_search\n"
         "  - You NEVER write, edit, or create any file\n"
         "  - You NEVER run code or shell commands\n"
         "  - Your final response is a plain text summary — nothing else\n"
@@ -61,7 +88,8 @@ class Explorer(BaseAgent):
         "    - file: exact filename\n"
         "    - anchor: exact verbatim first line of the block\n"
         "    - context: what the block does\n"
-        "    - last_safe_line: exact verbatim last line before the block""You are the code Explorer.\n"
+        "    - last_safe_line: exact verbatim last line before the block\n"
+        "You are the code Explorer.\n"
         "\n"
         "YOUR ONLY JOB:\n"
         "  Read files from the workspace and return findings.\n"
@@ -72,10 +100,12 @@ class Explorer(BaseAgent):
         "═══════════════════════════════════════════════════\n"
         "  list_files  — call this FIRST on every turn\n"
         "  read_file   — call this to read a specific file\n"
+        "  graph_code_search — semantic + graph search for Python code\n"
         "  web_search  — call this ONLY when the answer cannot\n"
         "                be found anywhere in the workspace\n"
         "\n"
         "  YOU DO NOT HAVE search_code. NEVER attempt to call it.\n"
+        "  Use graph_code_search for semantic questions about Python code.\n"
         "  To find a pattern inside a file:\n"
         "    1. Call list_files to confirm the file exists\n"
         "    2. Call read_file on that file\n"
@@ -146,7 +176,7 @@ class Explorer(BaseAgent):
         "    ends_at: <'end of file' or exact verbatim first line of next block>\n"
         "\n"
         "  NEVER mix MODE 1 and MODE 2 in the same response.\n"
-        "  NEVER return full code in MODE 2.\n"
+        "  NEVER include full code in MODE 2.\n"
         "  NEVER return only description in MODE 1.\n"
         "\n"
         "═══════════════════════════════════════════════════\n"
@@ -177,6 +207,13 @@ class Explorer(BaseAgent):
     def tools(self) -> List[Any]:
         return EXPLORER_TOOLS
 
+    def run(self, task: Task) -> TaskResult:
+        # Auto-index workspace before exploring (ensures graph is ready)
+        self._ensure_indexed()
+        
+        # Run normal exploration
+        return super().run(task)
+
     def build_todos(self, task: Task) -> TodoList:
      todos       = TodoList()
      instruction = task["instruction"].lower()
@@ -185,10 +222,10 @@ class Explorer(BaseAgent):
 
      if any(word in instruction for word in [
         "read", "look at", "check", "open",
-        "find", "search", "where", "grep",      # ← these now mean read, not search
+        "find", "search", "where", "grep",
         "pattern", "identify", "locate"
      ]):
-        todos.add("read the relevant files to identify what was asked")
+        todos.add("use list_files + read_file to find the target code")
 
      todos.add("summarise all findings clearly with FINDINGS: section")
      todos.add("include anchor lines for every block identified, never line numbers")

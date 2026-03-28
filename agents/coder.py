@@ -9,6 +9,7 @@ import re
 from typing import Any, List
 
 from agents.base_agent import BaseAgent, TodoList
+from core.config import WORKSPACE_PATH
 from core.types import AgentName, Task, TaskResult
 from tools.tool_registry import CODER_TOOLS
 
@@ -17,6 +18,23 @@ class Coder(BaseAgent):
 
     def __init__(self, llm: Any) -> None:
         super().__init__(llm=llm, agent_name=AgentName.CODER)
+        self._indexed_files: set[str] = set()
+
+    def _ensure_indexed(self, file_path: str) -> None:
+        """Auto-index workspace when files are modified.
+        
+        This ensures the graph RAG index stays current for subsequent queries.
+        Only triggers indexing once per file per session to avoid redundant work.
+        """
+        if file_path in self._indexed_files:
+            return
+        
+        try:
+            from tools.auto_index import auto_index_workspace
+            result = auto_index_workspace.invoke({"workspace_path": WORKSPACE_PATH})
+            self._indexed_files.add(file_path)
+        except Exception:
+            pass  # Silently ignore if graph RAG not configured
 
     @property
     def system_prompt(self) -> str:
@@ -123,8 +141,20 @@ class Coder(BaseAgent):
         return todos
 
     def run(self, task: Task) -> TaskResult:
+        # Auto-index workspace at start of coding task (incremental, skips unchanged files)
+        try:
+            from tools.auto_index import auto_index_workspace
+            auto_index_workspace.invoke({"workspace_path": WORKSPACE_PATH})
+        except Exception:
+            pass  # Silently ignore if graph RAG not configured
+        
         result    = super().run(task)
         artifacts = self._extract_artifacts(result["output"])
+        
+        # Auto-index after files are modified (keeps graph current for subsequent queries)
+        for file_path in artifacts:
+            self._ensure_indexed(file_path)
+        
         return TaskResult(
             task   =result["task"],
             output =result["output"],

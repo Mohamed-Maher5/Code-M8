@@ -88,7 +88,7 @@ _session_history = []
 def run_turn(user_input: str) -> str:
     logger.info(f"Turn started: {user_input}")
     history=load_history(last_n=5)
-   
+
     # step 0 — classify
     message_type = _classify(user_input)
     logger.info(f"Message type: {message_type}")
@@ -115,7 +115,7 @@ def run_turn(user_input: str) -> str:
     logger.info(f"Plan: {plan_summary(plan)}")
 
     # step 2 — dispatch
-    _set_status("explorer", "reading workspace")
+    _set_status("explorer", "exploring")
     try:
         all_results = _dispatcher.run_plan(
             plan         = plan,
@@ -124,10 +124,11 @@ def run_turn(user_input: str) -> str:
         )
     except Exception as e:
         logger.error(f"Dispatch error: {e}")
+        _set_status("coder", "coding")
         return f"Agent error: {e}"
 
     # step 3 — synthesize
-    _set_status("orchestrator", "summarising")
+    _set_status("orchestrator", "responding")
     response = _synthesizer.synthesize(
         user_request = user_input,
         all_results  = all_results,
@@ -138,16 +139,7 @@ def run_turn(user_input: str) -> str:
         final_answer = response,
     )
 
-    # save history
-    # _session_history.append(f"User: {user_input}")
-    # _session_history.append(f"Assistant: {response[:300]}")
-    # if len(_session_history) > 20:
-    #     _session_history[:] = _session_history[-20:]
-
     logger.info("Turn completed")
-    
-
-
 
     return response
 
