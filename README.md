@@ -378,42 +378,7 @@ Code-M8/
 
 ---
 
-## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **LangChain** - Framework for agent orchestration
-- **LangGraph** - Graph-based agent workflows
-- **Groq** - Fast inference for LLMs
-- **Neo4j** - Graph database for RAG
-- **Qwen** - Open-source LLM models
-
----
-
-## 📞 Support
-
-- **Issues:** [GitHub Issues](https://github.com/YOUR_USERNAME/Code-M8/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/YOUR_USERNAME/Code-M8/discussions)
-- **Email:** your.email@example.com
-
----
-
-## 🎯 Roadmap
-
-- [ ] Tree-sitter for multi-language support
-- [ ] Real-time file watching
-- [ ] Multi-workspace support
-- [ ] Custom tool creation
-- [ ] Plugin system
-- [ ] Web UI (optional)
-- [ ] Test generation
-- [ ] Code review mode
-
----
 
 **Built with ❤️ by Your Name**
 
