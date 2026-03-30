@@ -18,6 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from core.config import WORKSPACE_PATH
+import core.spec_store as spec_store
 from core.session_manager import create_session
 from ui.input_handler import handle_input
 from ui.panels import print_logo
@@ -120,9 +121,16 @@ class TerminalUI:
         elif action == "reset_session":
             console.print(f"  [{WARN}]Session cleared.[/{WARN}]")
         elif action == "show_session":
-            console.print(f"  [{DIM}]Turn {self.turn} · workspace: {WORKSPACE_PATH}[/{DIM}]")
+            # console.print(f"  [{DIM}]Turn {self.turn} · workspace: {WORKSPACE_PATH}[/{DIM}]")
+            self._show_session()
         elif action == "graph_clear":
             self._graph_clear()
+        elif action == "spec_load":
+            self._spec_load()
+        elif action == "spec_show":
+            self._spec_show()
+        elif action == "spec_clear":
+            self._spec_clear()
         # Graph indexing is now automatic - no user-facing commands
 
     def _graph_clear(self) -> None:
@@ -163,7 +171,12 @@ class TerminalUI:
             console.print(f"\n  [{ERROR}]Error: {e}[/{ERROR}]\n")
 
     def start(self) -> None:
-        create_session()
+        session_id = create_session()
+ 
+        # ── NEW: initialise SpecStore with the session id ──────────────────
+        spec_store.init(session_id)
+        # ───────────────────────────────────────────────────────────────────
+
         print_logo()
         self._divider()
 
@@ -188,6 +201,95 @@ class TerminalUI:
             except Exception as e:
                 logger.error(f"UI error: {e}")
                 console.print(f"\n  [{ERROR}]Error:[/{ERROR}] [{DIM}]{e}[/{DIM}]\n")
+
+
+    # ── Spec commands ─────────────────────────────────────────────────────────
+ 
+    def _spec_load(self) -> None:
+        """Prompt the user for a spec file path and load it."""
+        console.print()
+        console.print(f"  [{ACCENT}]Enter spec file path (relative to workspace), or paste inline text:[/{ACCENT}]")
+        try:
+            source = prompt("> ", style=INPUT_STYLE).strip()
+        except EOFError:
+            return
+ 
+        if not source:
+            console.print(f"  [{WARN}]Nothing entered.[/{WARN}]\n")
+            return
+ 
+        console.print(f"  [{DIM}]Parsing spec…[/{DIM}]")
+ 
+        try:
+            import json
+            import core.spec_store as spec_store
+            from tools.read_spec import read_spec as _read_spec_tool
+ 
+            raw = _read_spec_tool.invoke({"source": source})
+            parsed = json.loads(raw)
+ 
+            if isinstance(parsed, dict) and "error" in parsed:
+                console.print(f"  [{ERROR}]Spec parse error:[/{ERROR}] {parsed['error']}\n")
+                return
+ 
+            spec_store.set_criteria(parsed, source=source)
+            console.print(
+                f"  [{SUCCESS}]Loaded {len(parsed)} criteria from '{source}'[/{SUCCESS}]\n"
+            )
+            self._spec_show()
+        except Exception as e:
+            console.print(f"  [{ERROR}]Failed to load spec:[/{ERROR}] {e}\n")
+ 
+    def _spec_show(self) -> None:
+        """Display the current loaded spec criteria."""
+        import core.spec_store as spec_store
+ 
+        if not spec_store.has_spec():
+            console.print(f"  [{WARN}]No spec loaded. Use /spec load to load one.[/{WARN}]\n")
+            return
+ 
+        criteria = spec_store.get_criteria()
+        console.print()
+ 
+        table = Table(show_header=True, box=None, padding=(0, 1))
+        table.add_column("ID",       style="cyan",  width=8)
+        table.add_column("Priority", style="yellow", width=10)
+        table.add_column("Category", style="blue",   width=12)
+        table.add_column("Testable", style="green",  width=9)
+        table.add_column("Description")
+ 
+        for c in criteria:
+            table.add_row(
+                c["id"],
+                c["priority"],
+                c["category"],
+                "yes" if c.get("testable") else "no",
+                c["description"],
+            )
+ 
+        console.print(Panel(
+            table,
+            title   = f"[{ACCENT}] loaded spec: {spec_store._spec_source} [/{ACCENT}]",
+            border_style = ACCENT,
+            padding  = (1, 2),
+        ))
+        console.print()
+ 
+    def _spec_clear(self) -> None:
+        """Clear the current spec from memory and disk."""
+        import core.spec_store as spec_store
+        spec_store.clear()
+        console.print(f"  [{WARN}]Spec cleared.[/{WARN}]\n")
+ 
+    # ── Other commands ────────────────────────────────────────────────────────
+ 
+    def _show_session(self) -> None:
+        import core.spec_store as spec_store
+        spec_summary = spec_store.summary_text()
+        console.print(
+            f"  [{DIM}]Turn {self.turn} · workspace: {WORKSPACE_PATH}[/{DIM}]\n"
+            f"  [{DIM}]Spec: {spec_summary}[/{DIM}]"
+        )
 
     # ── Turn ──────────────────────────────────────────────────────────────────
 
@@ -249,6 +351,9 @@ class TerminalUI:
             ("/files",   "list workspace files"),
             ("/reset",   "clear session history"),
             ("/session", "show session info"),
+            ("/spec load",   "load a spec file or paste inline text"),
+            ("/spec show",   "display loaded criteria"),
+            ("/spec clear",  "remove current spec"),
             ("/graph-clear", "⚠️ wipe graph DB (full re-index next time)"),
             ("/help",    "show this help"),
             ("/exit",    "quit"),

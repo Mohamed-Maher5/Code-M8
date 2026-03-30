@@ -9,6 +9,10 @@ from tools.list_files  import list_files
 from tools.web_search  import web_search
 from tools.graph_search import graph_code_search
 from tools.auto_index import auto_index_workspace
+from tools.read_spec    import read_spec          # NEW
+ 
+# Orchestrator tools — only read_spec; orchestrator calls it during plan()
+ORCHESTRATOR_TOOLS = [read_spec]
 
 # Coder tools — write/edit/read + auto-index for automatic codebase indexing
 # The auto_index tool ensures the workspace is indexed when the coding agent
@@ -20,4 +24,4 @@ CODER_TOOLS = [write_file, edit_file, read_file, auto_index_workspace]
 EXPLORER_TOOLS = [read_file, list_files, web_search, graph_code_search]
 
 # All tools — for reference
-ALL_TOOLS = CODER_TOOLS + EXPLORER_TOOLS
+ALL_TOOLS = ORCHESTRATOR_TOOLS + CODER_TOOLS + EXPLORER_TOOLS
