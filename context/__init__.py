@@ -24,11 +24,17 @@ from context.graph_index import (
 from context.graph_search import retrieve_code_context, similarity_search, get_context
 from context.graph_builder import build_graph, embd_and_store
 from context.graph_chunker import chunk_file as graph_chunk_file
-from context.graph_config import graph_rag_enabled, get_driver, get_embedding_model, close_driver
+from context.graph_config import (
+    graph_rag_enabled,
+    get_driver,
+    get_embedding_model,
+    close_driver,
+    embed,
+    compute_sentence_similarity,
+)
 from context.graph_models import Relationship, Chunk, File
 
 __all__ = [
-    # Simple context building
     "chunk_file",
     "build_prompt",
     "trim_to_budget",
@@ -52,6 +58,8 @@ __all__ = [
     "get_driver",
     "get_embedding_model",
     "close_driver",
+    "embed",
+    "compute_sentence_similarity",
     # Graph RAG - models
     "Relationship",
     "Chunk",

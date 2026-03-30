@@ -33,7 +33,7 @@ prompt-toolkit>=3.0.50
 python-dotenv>=1.2.0
 numpy>=2.4.0
 tqdm>=4.67.0
-
+huggingface-hub>=0.14.0
 # ============================================================
 # OPTIONAL: Graph RAG (Neo4j + embeddings)
 # Required for semantic code search and graph-based retrieval

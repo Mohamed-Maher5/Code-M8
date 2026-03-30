@@ -37,7 +37,7 @@ SESSIONS_PATH  = "./sessions"
 
 HUNTER_CONTEXT_WINDOW  = 1_000_000   # OpenRouter qwen3-coder
 MINIMAX_CONTEXT_WINDOW = 196_608     # minimax-m2.5
-GROQ_CONTEXT_WINDOW    = 128_000     # groq models
+GROQ_CONTEXT_WINDOW    = int(os.getenv("GROQ_CONTEXT_WINDOW", "128000"))
 
 # ── Token limits — OpenRouter Hunter (kept, not active) ───────────────────────
 
@@ -51,8 +51,25 @@ MINIMAX_MAX_OUTPUT_TOKENS = int(MINIMAX_CONTEXT_WINDOW * 0.15)
 
 # ── Token limits — Groq (active) ─────────────────────────────────────────────
 
-GROQ_MAX_TOKENS        = int(GROQ_CONTEXT_WINDOW * 0.80)
-GROQ_MAX_OUTPUT_TOKENS = int(GROQ_CONTEXT_WINDOW * 0.15)
+# Use conservative defaults for real-world tool-heavy coding turns.
+# Input budget leaves room for retries/tool chatter, output budget is generous
+# enough for full patches while avoiding context overflow.
+GROQ_INPUT_RATIO = float(os.getenv("GROQ_INPUT_RATIO", "0.70"))
+GROQ_OUTPUT_RATIO = float(os.getenv("GROQ_OUTPUT_RATIO", "0.20"))
+
+GROQ_MAX_TOKENS        = int(GROQ_CONTEXT_WINDOW * GROQ_INPUT_RATIO)
+GROQ_MAX_OUTPUT_TOKENS = int(GROQ_CONTEXT_WINDOW * GROQ_OUTPUT_RATIO)
+
+# Agent-level pre-invoke prompt budget (within input budget)
+AGENT_MESSAGE_BUDGET_TOKENS = int(
+    os.getenv("AGENT_MESSAGE_BUDGET_TOKENS", str(int(GROQ_MAX_TOKENS * 0.75)))
+)
+
+# Planning and retrieval context defaults (override via .env)
+PLANNING_CONTEXT_MAX_TOKENS = int(os.getenv("PLANNING_CONTEXT_MAX_TOKENS", "3500"))
+PLANNING_CONTEXT_MAX_CHARS = int(os.getenv("PLANNING_CONTEXT_MAX_CHARS", "18000"))
+GRAPH_RETRIEVAL_MAX_TOKENS = int(os.getenv("GRAPH_RETRIEVAL_MAX_TOKENS", "8000"))
+GRAPH_RETRIEVAL_MAX_CHARS = int(os.getenv("GRAPH_RETRIEVAL_MAX_CHARS", "32000"))
 
 # ── File size limit ───────────────────────────────────────────────────────────
 
