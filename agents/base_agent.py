@@ -1,8 +1,3 @@
-
-
-
-
-
 # agents/base_agent.py
 # Abstract base class for all agents — ReAct pattern via LangGraph
 # Graph: START → llm_node → (tools?) → tool_node → llm_node → END
