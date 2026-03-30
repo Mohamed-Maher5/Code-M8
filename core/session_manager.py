@@ -361,9 +361,33 @@ def save_turn(
 
     existing.append(turn_record)
 
+    # Save initial turn record
     session_file.write_text(
         json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+
+    # NEW: Analyze relationships with previous turns
+    if _llm_extraction_ready and _llm_for_extraction and len(existing) > 1:
+        try:
+            from core.memory.llm_extractor import analyze_relationships_with_llm
+
+            previous_turns = existing[:-1]  # All turns except current
+            relationships = analyze_relationships_with_llm(
+                _llm_for_extraction, turn_record, previous_turns
+            )
+
+            # Update the turn record with relationships
+            existing[-1]["memory"]["relationships"] = relationships
+
+            # Re-save with relationships
+            session_file.write_text(
+                json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
+            print(f"[RELATIONSHIPS] Analyzed: {relationships}")
+
+        except Exception as e:
+            print(f"[RELATIONSHIPS] Failed to analyze: {e}")
 
     logger.info(f"Turn {turn_record['turn_id']} saved to session {_current_session_id}")
 

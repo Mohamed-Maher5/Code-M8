@@ -145,9 +145,57 @@ def run_turn(user_input: str) -> str:
 
     if message_type == "chat":
         # =============================================================================
-        # CHANGED: 2026-03-29 - Use _build_chat_context() for richer chat context
+        # CHANGED: 2026-03-30 - Add memory retrieval for chat queries
         # =============================================================================
-        return _chat_reply(user_input, _build_chat_context(history))
+        base_context = _build_chat_context(history)
+
+        # Check if this is a memory-dependent query
+        memory_keywords = [
+            "what did we",
+            "what have we",
+            "summary",
+            "worked on",
+            "done so far",
+            "remember",
+            "what files",
+            "what functions",
+            "did we fix",
+            "did we add",
+            "we added",
+            "we created",
+        ]
+
+        if any(kw in user_input.lower() for kw in memory_keywords) and ENHANCED_MEMORY:
+            try:
+                from core.memory.retrieval import retrieve_relevant_memory
+                from core.session_manager import get_session_id
+
+                session_id = get_session_id()
+                if session_id:
+                    memory_result = retrieve_relevant_memory(
+                        user_input, session_id=session_id
+                    )
+
+                    # Build memory context
+                    relevant_files = memory_result.get("relevant_files", [])
+                    top_result = memory_result.get("context", {}).get("top_result", {})
+                    summary = top_result.get("entities_summary", "")
+
+                    memory_context = f"""
+=== RELEVANT SESSION MEMORY ===
+{summary}
+
+Files mentioned in related work: {", ".join(relevant_files[:5]) if relevant_files else "None"}
+===================
+"""
+                    base_context += memory_context
+                    print(
+                        f"[CHAT MEMORY] Added memory context - {len(relevant_files)} files"
+                    )
+            except Exception as e:
+                print(f"[CHAT MEMORY] Failed to retrieve memory: {e}")
+
+        return _chat_reply(user_input, base_context)
 
     # =============================================================================
     # CHANGED: 2026-03-29 - Build rich context string for orchestrator
@@ -162,16 +210,77 @@ def run_turn(user_input: str) -> str:
     print("=" * 80)
 
     print("\n[LOOP DEBUG] Calling build_compact_memory()...")
-    compact_memory = build_compact_memory(
-        recent_turns=4,
-        max_total_chars=_PLANNING_CONTEXT_BUDGET_CHARS,
-        per_turn_chars=700,
-    )
+
+    # Try LLM-compacted memory first (more intelligent)
+    if ENHANCED_MEMORY:
+        try:
+            llm_compacted = build_llm_compacted_memory()
+            if llm_compacted.get("method") == "llm" and llm_compacted.get(
+                "llm_compacted"
+            ):
+                # Use LLM-compacted version
+                compact_memory = {
+                    "rolling_summary": llm_compacted.get("llm_compacted", ""),
+                    "recent_turns": [],
+                    "files_mentioned": [],
+                }
+                print("[LOOP DEBUG] Using LLM-compacted memory")
+            else:
+                compact_memory = build_compact_memory(
+                    recent_turns=4,
+                    max_total_chars=_PLANNING_CONTEXT_BUDGET_CHARS,
+                    per_turn_chars=700,
+                )
+        except Exception as e:
+            print(f"[LOOP DEBUG] LLM compaction failed: {e}")
+            compact_memory = build_compact_memory(
+                recent_turns=4,
+                max_total_chars=_PLANNING_CONTEXT_BUDGET_CHARS,
+                per_turn_chars=700,
+            )
+    else:
+        compact_memory = build_compact_memory(
+            recent_turns=4,
+            max_total_chars=_PLANNING_CONTEXT_BUDGET_CHARS,
+            per_turn_chars=700,
+        )
 
     print("[LOOP DEBUG] Calling _build_planning_context()...")
     history_context = _build_planning_context(
         compact_memory, history, user_request=user_input
     )
+
+    # NEW: Add semantic memory retrieval for planning
+    if ENHANCED_MEMORY:
+        try:
+            from core.memory.retrieval import retrieve_relevant_memory
+            from core.session_manager import get_session_id
+
+            session_id = get_session_id()
+            if session_id:
+                memory_result = retrieve_relevant_memory(
+                    user_input, session_id=session_id
+                )
+
+                relevant_files = memory_result.get("relevant_files", [])
+                top_result = memory_result.get("context", {}).get("top_result", {})
+                summary = top_result.get("entities_summary", "")
+
+                if summary or relevant_files:
+                    memory_context = f"""
+
+=== SESSION MEMORY (from previous work) ===
+{summary}
+
+Files involved in related work: {", ".join(relevant_files[:5]) if relevant_files else "None"}
+========================================
+"""
+                    history_context += memory_context
+                    print(
+                        f"[PLANNING MEMORY] Added {len(relevant_files)} relevant files"
+                    )
+        except Exception as e:
+            print(f"[PLANNING MEMORY] Failed: {e}")
 
     # step 1 — orchestrator plans using enriched session history
     _set_status("orchestrator", "planning")
