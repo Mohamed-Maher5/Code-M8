@@ -100,10 +100,13 @@ class AgentState(TypedDict):
 
 
 class BaseAgent(ABC):
+    DEFAULT_MAX_STEPS = 5
+
     def __init__(self, llm: Any, agent_name: AgentName) -> None:
         self.llm = llm
         self.name = agent_name
         self._graph = self._build_graph()
+        self._step_count = 0
         logger.info(f"BaseAgent [{self.name.value}] initialised")
 
     # ── Abstract ──────────────────────────────────────────────────────────────
@@ -121,7 +124,10 @@ class BaseAgent(ABC):
 
     # ── run() ─────────────────────────────────────────────────────────────────
 
-    def run(self, task: Task) -> TaskResult:
+    def run(self, task: Task, max_steps: int = None) -> TaskResult:
+        if max_steps is None:
+            max_steps = self.DEFAULT_MAX_STEPS
+
         start_time = time.time()
         if is_interrupted():
             raise InterruptError("Interrupted before agent run")
@@ -137,6 +143,7 @@ class BaseAgent(ABC):
         messages.append(HumanMessage(content=task["instruction"]))
 
         output = ""
+        step_count = 0
 
         for chunk in self._graph.stream({"messages": messages}):
             if is_interrupted():
@@ -153,9 +160,16 @@ class BaseAgent(ABC):
                         print(f"  💬 Agent answered")
 
             if node_name == "tools" and state.get("messages"):
+                step_count += 1
                 last_msg = state["messages"][-1]
                 if hasattr(last_msg, "name"):
                     print(f"  🔧 Tool ran: {last_msg.name}")
+
+            if step_count >= max_steps:
+                print(f"  ⏹️  Reached max steps ({max_steps}), stopping...")
+                if not output:
+                    output = "Search completed. See previous tool results for findings."
+                break
 
         duration_ms = int((time.time() - start_time) * 1000)
         logger.info(f"BaseAgent [{self.name.value}] done in {duration_ms}ms")

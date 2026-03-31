@@ -100,7 +100,7 @@ class Explorer(BaseAgent):
             "TOOLS (PRIORITY ORDER)\n"
             "═══════════════════════════════════════════════════\n"
             "  1. graph_code_search — call this FIRST on every turn (DEFAULT)\n"
-            "  2. read_file   — call this after graph search for full file content\n"
+            "  2. read_file   — call this after graph search for full file content if  i need detailed content \n"
             "  3. list_files  — call this ONLY when graph search fails\n"
             "  4. web_search  — call this ONLY when the answer cannot\n"
             "                be found anywhere in the workspace\n"
@@ -208,12 +208,12 @@ class Explorer(BaseAgent):
     def tools(self) -> List[Any]:
         return EXPLORER_TOOLS
 
-    def run(self, task: Task) -> TaskResult:
+    def run(self, task: Task, max_steps: int = None) -> TaskResult:
         # Auto-index workspace before exploring (ensures graph is ready)
         self._ensure_indexed()
 
-        # Run normal exploration
-        return super().run(task)
+        # Run normal exploration with step limit
+        return super().run(task, max_steps=max_steps)
 
     def build_todos(self, task: Task) -> TodoList:
         todos = TodoList()

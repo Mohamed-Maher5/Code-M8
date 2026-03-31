@@ -31,6 +31,7 @@ from core.config import (
     GROQ_MAX_OUTPUT_TOKENS,
     PLANNING_CONTEXT_MAX_TOKENS,
     PLANNING_CONTEXT_MAX_CHARS,
+    EXPLORER_MAX_STEPS,
 )
 from core.token_usage import estimate_tokens
 from core_logic.dispatcher import Dispatcher
@@ -89,7 +90,7 @@ def _set_status(agent: str, action: str) -> None:
 _hunter_llm = ChatOpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url=OPENROUTER_BASE_URL,
-    model=HUNTER_MODEL,
+    model=MINIMAX_MODEL,
     streaming=True,
 )
 
@@ -106,7 +107,7 @@ _qwen_llm = ChatGroq(
 
 _orchestrator = Orchestrator(llm=_qwen_llm)
 _explorer = Explorer(llm=_qwen_llm)
-_coder = Coder(llm=_qwen_llm)
+_coder = Coder(llm=_hunter_llm)
 
 _dispatcher = Dispatcher(
     orchestrator=_orchestrator,
@@ -348,6 +349,7 @@ Files involved in related work: {", ".join(relevant_files[:5]) if relevant_files
             plan=plan,
             orchestrator=_orchestrator,
             user_request=user_input,
+            max_steps=EXPLORER_MAX_STEPS,
         )
     except InterruptError:
         raise  # Re-raise interrupt errors

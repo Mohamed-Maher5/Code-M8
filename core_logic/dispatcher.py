@@ -81,6 +81,7 @@ class Dispatcher:
         plan: Plan,
         orchestrator: OrchestratorAgent,
         user_request: str = "",
+        max_steps: int = None,
     ) -> List[TaskResult]:
         all_results: List[TaskResult] = []
         explorer_result: Optional[TaskResult] = None
@@ -96,7 +97,10 @@ class Dispatcher:
 
             if agent_name == "explorer":
                 logger.info("Dispatcher: running explorer")
-                result = self._route(task, "explorer")
+                if max_steps is not None:
+                    result = self._route(task, "explorer", max_steps=max_steps)
+                else:
+                    result = self._route(task, "explorer")
                 explorer_result = result
                 all_results.append(result)
 
@@ -136,7 +140,7 @@ class Dispatcher:
     def agents_ready(self) -> bool:
         return all(self._agents.get(k) is not None for k in ("explorer", "coder"))
 
-    def _route(self, task: Task, agent_name: str) -> TaskResult:
+    def _route(self, task: Task, agent_name: str, max_steps: int = None) -> TaskResult:
         agent: Optional[Agent] = self._agents.get(agent_name)  # type: ignore
         if agent is None:
             raise RoutingViolation(
@@ -153,4 +157,6 @@ class Dispatcher:
         )
 
         logger.info(f"Dispatcher: routing to {agent_name}")
+        if max_steps is not None:
+            return agent.run(task, max_steps=max_steps)
         return agent.run(task)
