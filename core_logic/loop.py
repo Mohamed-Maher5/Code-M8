@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_groq import ChatGroq
 
 from agents.coder import Coder
 from agents.explorer import Explorer
@@ -26,7 +25,6 @@ from core.config import (
     MINIMAX_MODEL,
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
-    GROQ_API_KEY,
     GROQ_MODEL,
     GROQ_MAX_OUTPUT_TOKENS,
     PLANNING_CONTEXT_MAX_TOKENS,
@@ -87,27 +85,28 @@ def _set_status(agent: str, action: str) -> None:
 
 # ── LLM clients ───────────────────────────────────────────────────────────────
 
-_hunter_llm = ChatOpenAI(
+# OpenRouter LLM for Orchestrator and Explorer (fast model)
+_openrouter_fast_llm = ChatOpenAI(
+    api_key=OPENROUTER_API_KEY,
+    base_url=OPENROUTER_BASE_URL,
+    model=GROQ_MODEL,
+    streaming=True,
+)
+
+# OpenRouter LLM for Coder (capable model for code generation)
+_openrouter_coder_llm = ChatOpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url=OPENROUTER_BASE_URL,
     model=MINIMAX_MODEL,
     streaming=True,
 )
 
-_qwen_llm = ChatGroq(
-    api_key=GROQ_API_KEY,
-    max_tokens=GROQ_MAX_OUTPUT_TOKENS,
-    model=GROQ_MODEL,
-    streaming=True,
-    model_kwargs={"include_reasoning": False},
-)
-
 
 # ── Agents ────────────────────────────────────────────────────────────────────
 
-_orchestrator = Orchestrator(llm=_qwen_llm)
-_explorer = Explorer(llm=_qwen_llm)
-_coder = Coder(llm=_hunter_llm)
+_orchestrator = Orchestrator(llm=_openrouter_fast_llm)
+_explorer = Explorer(llm=_openrouter_fast_llm)
+_coder = Coder(llm=_openrouter_coder_llm)
 
 _dispatcher = Dispatcher(
     orchestrator=_orchestrator,
@@ -119,7 +118,7 @@ _synthesizer = Synthesizer(orchestrator=_orchestrator)
 
 # Setup LLM for memory extraction
 try:
-    set_llm_for_extraction(_qwen_llm)
+    set_llm_for_extraction(_openrouter_fast_llm)
 except Exception as e:
     print(f"[LOOP] Could not setup LLM extraction: {e}")
 
@@ -365,7 +364,9 @@ Files involved in related work: {", ".join(relevant_files[:5]) if relevant_files
         try:
             from core.memory.llm_extractor import extract_with_llm
 
-            llm_memory = extract_with_llm(_qwen_llm, user_input, all_results, response)
+            llm_memory = extract_with_llm(
+                _openrouter_fast_llm, user_input, all_results, response
+            )
             _memory_manager.on_turn_end(user_input, response, llm_memory)
         except Exception as e:
             print(f"[LOOP] MemoryManager.on_turn_end failed: {e}")
@@ -416,7 +417,7 @@ Reply with a single word: task or chat. Nothing else."""
 
 def _classify(user_input: str) -> str:
     try:
-        response = _qwen_llm.invoke(
+        response = _openrouter_fast_llm.invoke(
             [
                 SystemMessage(content=_CLASSIFIER_SYSTEM),
                 HumanMessage(content=user_input),
@@ -450,7 +451,7 @@ If they ask what you do, explain you help developers read and write code."""
 
 def _chat_reply(user_input: str, his: str) -> str:
     try:
-        response = _qwen_llm.invoke(
+        response = _openrouter_fast_llm.invoke(
             [
                 SystemMessage(content=_CHAT_SYSTEM),
                 HumanMessage(content=user_input + his),

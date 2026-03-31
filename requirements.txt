@@ -44,7 +44,7 @@ huggingface-hub>=0.14.0
 neo4j>=5.14.0
 
 # Local embeddings (Sentence Transformers)
-sentence-transformers>=3.0.0
+# sentence-transformers>=3.0.0
 
 # ============================================================
 # DEVELOPMENT (optional)

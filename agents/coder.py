@@ -50,8 +50,50 @@ class Coder(BaseAgent):
             "  - read_file       — read a file before editing it\n"
             "  - write_file      — create a new file or replace entire file content\n"
             "  - edit_file       — replace one specific block inside a file\n"
+            "  - run_test        — execute inline Python test code (see below)\n"
             "\n"
             "═══════════════════════════════════════════════════\n"
+            "TESTING — when user asks to test code\n"
+            "═══════════════════════════════════════════════════\n"
+            "\n"
+            "  When user asks to TEST something:\n"
+            "    - Use run_test to execute inline Python test code\n"
+            '    - Generate test code in python -c "..." style\n'
+            "    - Test snippets run against workspace files\n"
+            "    - Results are printed as logs with pass/fail status\n"
+            "    - NEVER create any test files in the workspace\n"
+            "    - NEVER use write_file for testing\n"
+            "\n"
+            "  CRITICAL: CLEAN UP AFTER TESTING\n"
+            "    - run_test automatically cleans up its temp file\n"
+            "    - If you accidentally created any files (like test_*.py), DELETE them\n"
+            "    - Use edit_file to remove any files you created\n"
+            "    - Workspace must be clean after testing - no test files allowed\n"
+            "\n"
+            "  CRITICAL IMPORT RULES:\n"
+            "    - Workspace files are in: ./workspace/ directory\n"
+            "    - Import paths are relative to workspace root\n"
+            "    - If file is at: workspace/utils/math.py\n"
+            "      import is: from utils.math import add\n"
+            "    - NEVER use: from math import ... (that's Python stdlib)\n"
+            "    - ALWAYS verify file location first with list_files\n"
+            "\n"
+            "  TEST GENERATION RULES:\n"
+            "    - Generate simple test snippets in python -c style\n"
+            '    - Format: run_test(code="...", imports="from utils.math import func")\n'
+            "    - Test code should print results with clear pass/fail indicators\n"
+            "    - Example test format:\n"
+            '        code="""\n'
+            "result = add(1, 2)\n"
+            "print(f'1 + 2 = {result} | expected 3 ->', 'PASS' if result == 3 else 'FAIL')\n"
+            "result = add(10, 5)\n"
+            "print(f'10 + 5 = {result} | expected 15 ->', 'PASS' if result == 15 else 'FAIL')\n"
+            '"""\n'
+            "    - Test snippets are TEMPORARY files deleted after execution\n"
+            "    - ALWAYS run tests AFTER making changes to verify correctness\n"
+            "\n"
+            "═══════════════════════════════════════════════════"
+            "\n"
             "CHOOSING THE RIGHT TOOL — read this carefully\n"
             "═══════════════════════════════════════════════════\n"
             "\n"
@@ -80,7 +122,8 @@ class Coder(BaseAgent):
             "  If edit_file fails twice — switch to write_file approach.\n"
             "  NEVER guess old_content from memory — always read first.\n"
             "\n"
-            "═══════════════════════════════════════════════════\n"
+            "═══════════════════════════════════════════════════"
+            "\n"
             "PATH RESOLUTION — ALWAYS VERIFY PATHS BEFORE EDITING\n"
             "═══════════════════════════════════════════════════\n"
             "\n"
@@ -111,7 +154,8 @@ class Coder(BaseAgent):
             "\n"
             "  NEVER assume a path is correct — ALWAYS verify first.\n"
             "\n"
-            "═══════════════════════════════════════════════════\n"
+            "═══════════════════════════════════════════════════"
+            "\n"
             "VERIFICATION — mandatory after every write or edit\n"
             "═══════════════════════════════════════════════════\n"
             "  After every write_file or edit_file call:\n"
@@ -127,14 +171,17 @@ class Coder(BaseAgent):
             "\n"
             "RULES:\n"
             "  - NEVER ask for more context\n"
-            "  - NEVER run code or tests\n"
+            "  - NEVER run code or tests manually\n"
             "  - Write complete working code — no placeholders or TODOs\n"
             "  - Follow the coding style in the instruction exactly\n"
             "\n"
             "FINAL RESPONSE:\n"
             "  CHANGES:\n"
             "  - created: path/to/file.py\n"
-            "  - edited:  path/to/other.py"
+            "  - edited:  path/to/other.py\n"
+            "  \n"
+            "  TESTS:\n"
+            "  - test output logs here"
         )
 
     @property
@@ -175,6 +222,9 @@ class Coder(BaseAgent):
             if not todos.items:
                 todos.add("implement the requested changes")
 
+        if any(w in instruction for w in ["test", "verify", "check"]):
+            todos.add("run tests using run_test tool")
+
         todos.add("confirm all files written in CHANGES: section")
         return todos
 
@@ -194,11 +244,42 @@ class Coder(BaseAgent):
         for file_path in artifacts:
             self._ensure_indexed(file_path)
 
+        # Cleanup: remove any test files created during testing
+        self._cleanup_test_files()
+
         return TaskResult(
             task=result["task"],
             output=result["output"],
             success=result["success"],
         )
+
+    def _cleanup_test_files(self) -> None:
+        """Clean up any test files in workspace after testing."""
+        try:
+            import os
+            import glob
+
+            workspace = os.path.abspath(WORKSPACE_PATH)
+
+            test_files = glob.glob(os.path.join(workspace, "test_*.py"))
+            test_files += glob.glob(os.path.join(workspace, "*_test.py"))
+
+            for test_file in test_files:
+                try:
+                    os.remove(test_file)
+                    print(f"[CLEANUP] Removed test file: {test_file}")
+                except Exception:
+                    pass
+
+            app_log = os.path.join(workspace, "app.log")
+            if os.path.exists(app_log):
+                try:
+                    os.remove(app_log)
+                    print(f"[CLEANUP] Removed app.log")
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _extract_artifacts(self, output: str) -> List[str]:
         artifacts = []

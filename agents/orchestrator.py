@@ -78,6 +78,15 @@ class Orchestrator(BaseAgent):
             "     Example: 'fix the bug in auth'\n"
             "              → explorer finds auth code, coder fixes it\n"
             "\n"
+            "  4. TEST / VERIFY / RUN (TEST)\n"
+            "     User wants to RUN TESTS or VERIFY code works.\n"
+            "     Signals: test, verify, run test, check function, check method,\n"
+            "              run the code, execute test\n"
+            "     Action: Use explorer first (find the code), then coder.\n"
+            "     Example: 'test the add function'\n"
+            "              → explorer finds the function, coder runs inline test\n"
+            "     IMPORTANT: Coder will run inline tests and print results.\n"
+            "\n"
             "USING CONTEXT/MEMORY EFFECTIVELY:\n"
             "\n"
             "  The history provides HINTS about the codebase, NOT directives.\n"
@@ -106,18 +115,23 @@ class Orchestrator(BaseAgent):
             "\n"
             "  Q: Does user want to EDIT/CHANGE existing code?\n"
             "     → YES: Use explorer (find code) → coder (edit)\n"
+            "     → NO:  Continue\n"
+            "\n"
+            "  Q: Does user want to TEST/VERIFY/RUN code?\n"
+            "     → YES: Use explorer (find function) → coder (run inline test)\n"
             "     → NO:  Use explorer to explore, then decide\n"
             "\n"
             "RULES (always apply):\n"
             "  1. explorer ALWAYS runs before coder for any write operation\n"
             "  2. Never forward raw explorer output to coder - digest it first\n"
             "  3. For SEARCH requests → search WIDELY, don't narrow to history files\n"
-            "  4. Be specific in instructions - mention file patterns or locations\n"
+            "  4. For TEST requests → coder must run inline test and print results\n"
+            "  5. Be specific in instructions - mention file patterns or locations\n"
             "\n"
             "OUTPUT FORMAT:\n"
             "  Return a single JSON object. No markdown. No extra text.\n"
             "  {\n"
-            '    "task_type": "read" | "write",\n'
+            '    "task_type": "read" | "write" | "test",\n'
             '    "reasoning": "one sentence explaining your plan and how you used context",\n'
             '    "steps": [\n'
             '      {"agent": "explorer", "instruction": "specific instruction - include search scope"},\n'
@@ -136,8 +150,15 @@ class Orchestrator(BaseAgent):
             '    {"agent": "coder",    "instruction": "Create/edit file Y with Z"}\n'
             "  ]}\n"
             "\n"
+            "  For TEST tasks (test/verify code):\n"
+            '  {"task_type": "test", "reasoning": "...", "steps": [\n'
+            '    {"agent": "explorer", "instruction": "Find the function/class to test in workspace"},\n'
+            '    {"agent": "coder",    "instruction": "Use run_test to run inline tests - NO files allowed"}\n'
+            "  ]}\n"
+            "\n"
             "  Key: Be explicit about SEARCH SCOPE in explorer instructions.\n"
             "       Say 'search ENTIRE workspace' when appropriate.\n"
+            "  For TEST tasks: coder MUST use run_test tool, NEVER create test files.\n"
         )
 
     @property
@@ -185,6 +206,12 @@ class Orchestrator(BaseAgent):
             "  - Which files to edit and what changes to make\n"
             "  - What the code must do\n"
             "  - Any patterns or conventions to follow from the existing code\n"
+            "\n"
+            "IMPORTANT: If user wants to TEST/VERIFY code:\n"
+            "  - DO NOT create any test files (no test_*.py)\n"
+            "  - Use run_test tool with inline Python code\n"
+            '  - Example: run_test(code="result = add(1,2); print(f\'1+2={result}\')", imports="from math import add")\n'
+            "  - Print test results in terminal with PASS/FAIL indicators\n"
             "\n"
             "╔═══════════════════════════════════════════════════════════════════╗\n"
             "║  CRITICAL: FILE PATH FORMAT                                       ║\n"
