@@ -17,7 +17,7 @@ GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # ── Models — OpenRouter (kept, not active) ────────────────────────────────────
 
-HUNTER_MODEL = "qwen/qwen3-coder:free"
+HUNTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"  # "qwen/qwen3-coder:free"
 MINIMAX_MODEL = "minimax/minimax-m2.5"
 
 # ── Models — Groq (active) ────────────────────────────────────────────────────
