@@ -65,9 +65,9 @@ _qwen_llm = ChatGroq(
 
 # ── Agents ────────────────────────────────────────────────────────────────────
 
-_orchestrator = Orchestrator(llm=_qwen_llm)
-_explorer     = Explorer(llm=_qwen_llm)
-_coder        = Coder(llm=_qwen_llm)
+_orchestrator = Orchestrator(llm=_hunter_llm)
+_explorer     = Explorer(llm=_hunter_llm)
+_coder        = Coder(llm=_hunter_llm)
 
 _dispatcher  = Dispatcher(
     orchestrator = _orchestrator,
