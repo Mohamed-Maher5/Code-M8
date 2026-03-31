@@ -72,7 +72,7 @@ GRAPH_RETRIEVAL_MAX_TOKENS = int(os.getenv("GRAPH_RETRIEVAL_MAX_TOKENS", "8000")
 GRAPH_RETRIEVAL_MAX_CHARS = int(os.getenv("GRAPH_RETRIEVAL_MAX_CHARS", "32000"))
 
 # Agent step limits
-EXPLORER_MAX_STEPS = int(os.getenv("EXPLORER_MAX_STEPS", "3"))
+EXPLORER_MAX_STEPS = int(os.getenv("EXPLORER_MAX_STEPS", "6"))
 
 # ── File size limit ───────────────────────────────────────────────────────────
 

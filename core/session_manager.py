@@ -339,6 +339,8 @@ def save_turn(
         "user_message": user_message,
         "final_answer": final_answer,
         "files_mentioned": files_mentioned,  # NEW: 2026-03-29
+        "files_created": [],  # Will be filled by file tracker
+        "files_modified": [],  # Will be filled by file tracker
         "memory": memory,
         "results": [
             {
@@ -365,6 +367,21 @@ def save_turn(
     session_file.write_text(
         json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+
+    # NEW: Update turn with actual file changes from tracker
+    try:
+        from core.agent_file_tracker import get_tracked_files
+
+        tracked = get_tracked_files()
+        if tracked["all"]:
+            existing[-1]["files_created"] = tracked.get("created", [])
+            existing[-1]["files_modified"] = tracked.get("modified", [])
+            # Re-save with file tracker info
+            session_file.write_text(
+                json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+    except ImportError:
+        pass
 
     # NEW: Analyze relationships with previous turns
     if _llm_extraction_ready and _llm_for_extraction and len(existing) > 1:

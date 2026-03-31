@@ -136,6 +136,15 @@ _PLANNING_CONTEXT_BUDGET_TOKENS = PLANNING_CONTEXT_MAX_TOKENS
 def run_turn(user_input: str) -> str:
     logger.info(f"Turn started: {user_input}")
 
+    # NEW: Initialize file tracking for this turn
+    try:
+        from core.agent_file_tracker import reset_tracker, init_file_tracking
+
+        reset_tracker()
+        init_file_tracking()
+    except ImportError:
+        pass
+
     # =============================================================================
     # CHANGED: 2026-03-29 - Load structured history (Option B - Better Context)
     #   - Returns list of dicts instead of flat strings
@@ -151,45 +160,13 @@ def run_turn(user_input: str) -> str:
     if message_type == "chat":
         # =============================================================================
         # CHANGED: 2026-03-30 - Add memory retrieval for chat queries
+        # CHANGED: 2026-03-31 - Make memory detection generic via classifier
         # =============================================================================
         base_context = _build_chat_context(history)
 
-        # Check if this is a memory-dependent query
-        memory_keywords = [
-            "what did we",
-            "what have we",
-            "summary",
-            "worked on",
-            "done so far",
-            "remember",
-            "what files",
-            "what functions",
-            "did we fix",
-            "did we add",
-            "we added",
-            "we created",
-            # New keywords for "what did you do" type questions
-            "what did you",
-            "what did we",
-            "tell me what",
-            "list what",
-            "recap",
-            # User preference keywords
-            "my name",
-            "what is my",
-            "do you know my",
-            "preference",
-            "i prefer",
-            "i like",
-            "i hate",
-            "i love",
-            "review",
-            "past work",
-            "previous work",
-            "history",
-        ]
-
-        if any(kw in user_input.lower() for kw in memory_keywords) and ENHANCED_MEMORY:
+        # For all chat messages, try to get relevant memory context
+        # The classifier already determines if it's a memory-dependent query (chat type)
+        if ENHANCED_MEMORY:
             try:
                 from core.memory.retrieval import retrieve_relevant_memory
                 from core.session_manager import get_session_id
@@ -197,28 +174,36 @@ def run_turn(user_input: str) -> str:
 
                 session_id = get_session_id()
                 if session_id:
-                    # Use MemoryManager for richer context
+                    # Use MemoryManager for project-level context
                     mm = get_memory_manager()
                     memory_context = mm.build_context(user_input, session_id)
 
-                    # Also get semantic search results
-                    memory_result = retrieve_relevant_memory(
+                    # Also get semantic search results with proper formatting
+                    from core.memory.retrieval import (
+                        build_memory_context_for_orchestrator,
+                    )
+
+                    memory_context += build_memory_context_for_orchestrator(
                         user_input, session_id=session_id
                     )
 
+                    # Get raw retrieval for files list
+                    memory_result = retrieve_relevant_memory(
+                        user_input, session_id=session_id
+                    )
                     relevant_files = memory_result.get("relevant_files", [])
                     top_result = memory_result.get("context", {}).get("top_result", {})
                     summary = top_result.get("entities_summary", "")
 
-                    # Combine both
-                    full_context = memory_context
-                    if summary and summary not in full_context:
-                        full_context += f"\n\n=== Previous Work Summary ===\n{summary}\n\nFiles: {', '.join(relevant_files[:5])}"
+                    # Add summary if not already in context
+                    if summary and summary not in memory_context:
+                        memory_context += f"\n\n=== Previous Work Summary ===\n{summary}\n\nFiles: {', '.join(relevant_files[:5])}"
 
-                    base_context = full_context + "\n\n" + base_context
-                    print(
-                        f"[CHAT MEMORY] Added memory context - {len(relevant_files)} files"
-                    )
+                    if memory_context:
+                        base_context = memory_context + "\n\n" + base_context
+                        print(
+                            f"[CHAT MEMORY] Added memory context - {len(relevant_files)} files"
+                        )
             except Exception as e:
                 print(f"[CHAT MEMORY] Failed to retrieve memory: {e}")
 
@@ -385,6 +370,23 @@ Files involved in related work: {", ".join(relevant_files[:5]) if relevant_files
         except Exception as e:
             print(f"[LOOP] MemoryManager.on_turn_end failed: {e}")
 
+    # NEW: Track files created/modified in this turn
+    try:
+        from core.agent_file_tracker import (
+            scan_workspace_for_changes,
+            get_tracked_files,
+        )
+
+        changes = scan_workspace_for_changes()
+        tracked = get_tracked_files()
+        if tracked["all"]:
+            print(
+                f"[FILE TRACKER] Created: {len(tracked['created'])}, Modified: {len(tracked['modified'])}"
+            )
+            logger.info(f"Files changed: {tracked['all']}")
+    except ImportError:
+        pass
+
     logger.info("Turn completed")
 
     return response
@@ -395,12 +397,19 @@ Files involved in related work: {", ".join(relevant_files[:5]) if relevant_files
 _CLASSIFIER_SYSTEM = """You are a message classifier.
 Classify the user message into exactly one of these two categories:
 
-  task  — the user wants to do something with code:
-          write, read, explain, fix, add, create, edit, search,
-          understand, refactor, debug, implement, find, list files, etc.
+  task  — The user wants you to DO something with code:
+          - search, find, read, write, create, edit, fix code
+          - explain how code works
+          - implement, add, create, refactor something
+          - Note: Questions that START with "what" but ask you to FIND/SHOW code are TASK
 
-  chat  — the user is making conversation, greeting, asking about you,
-          saying thanks, or anything NOT related to code or files.
+  chat  — The user is making conversation or asking QUESTIONS about past work:
+          - greeting (hello, hi)
+          - thanks
+          - asking about YOU (what are you, who are you)
+          - asking about PAST work (what did you find/check/examine/do earlier)
+          - asking to SUMMARIZE/RECAP what was discussed
+          - Note: Questions like "what classes did you find?" or "what did you check?" are CHAT
 
 Reply with a single word: task or chat. Nothing else."""
 
@@ -423,8 +432,19 @@ def _classify(user_input: str) -> str:
 # ── Chat reply ────────────────────────────────────────────────────────────────
 
 _CHAT_SYSTEM = """You are Code-M8, an AI coding assistant.
-The user is making conversation — not asking about code.
-Reply naturally and briefly. Keep it under 2 sentences.
+
+CONTEXT PROVIDED:
+- Previous conversation history
+- Memory context about what was done in previous turns (files checked, classes examined, etc.)
+
+TASK: Reply to the user's question using the provided context.
+
+IMPORTANT:
+- Use the provided conversation history and memory context to answer questions
+- If the context mentions files, classes, or functions that were checked, include them in your answer
+- Be specific: mention the actual file names, class names, and function names
+- If the context contains relevant information, use it to provide accurate answers
+
 If they ask what you do, explain you help developers read and write code."""
 
 

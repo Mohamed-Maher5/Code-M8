@@ -34,8 +34,11 @@ def retrieve_relevant_memory(query: str, session_id: str = None) -> Dict[str, An
         print("[MEMORY RETRIEVAL] No session ID available")
         return _empty_memory_context()
 
-    # Bug 1 Fix: Only rebuild index when session changes
-    if session_id != _loaded_session_id:
+    # Bug 1 Fix: Only rebuild index when session changes OR if index is empty
+    index = get_memory_index()
+    needs_reload = session_id != _loaded_session_id or len(index.turns) == 0
+
+    if needs_reload:
         load_session_into_index(session_id)
         _loaded_session_id = session_id
 
@@ -128,6 +131,29 @@ def build_memory_context_for_orchestrator(
     if memory["relevant_files"]:
         lines.append(f"Files to check: {', '.join(memory['relevant_files'][:5])}")
 
+    # Extract and include entities from top results
+    all_files = set()
+    all_classes = set()
+    all_functions = set()
+    all_concepts = set()
+
+    for result in memory.get("context", {}).get("all_results", []):
+        turn_memory = result.get("memory", {})
+        entities = turn_memory.get("entities", {})
+        all_files.update(entities.get("files", []))
+        all_classes.update(entities.get("classes", []))
+        all_functions.update(entities.get("functions", []))
+        all_concepts.update(entities.get("concepts", []))
+
+    if all_files:
+        lines.append(f"Files examined: {', '.join(sorted(all_files))}")
+    if all_classes:
+        lines.append(f"Classes found: {', '.join(sorted(all_classes))}")
+    if all_functions:
+        lines.append(f"Functions found: {', '.join(sorted(all_functions))}")
+    if all_concepts:
+        lines.append(f"Concepts: {', '.join(sorted(all_concepts))}")
+
     # Problems to avoid
     if memory["problems_to_avoid"]:
         lines.append(f"Known problems: {', '.join(memory['problems_to_avoid'])}")
@@ -142,6 +168,11 @@ def build_memory_context_for_orchestrator(
         user_msg = top.get("user_message", "")
         if user_msg:
             lines.append(f"Similar past request: {user_msg[:100]}")
+
+        # Also get entities summary from top result
+        top_summary = top.get("entities_summary", "")
+        if top_summary:
+            lines.append(f"Summary: {top_summary[:200]}")
 
     lines.append("--- END MEMORY ---")
 
