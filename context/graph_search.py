@@ -4,7 +4,7 @@ import numpy as np
 
 from core.config import GRAPH_RETRIEVAL_MAX_CHARS, GRAPH_RETRIEVAL_MAX_TOKENS
 from context.graph_config import embed
-from context.token_budget import estimate_tokens
+from core.token_usage import estimate_tokens
 
 
 def similarity_search(query, driver, k=5):

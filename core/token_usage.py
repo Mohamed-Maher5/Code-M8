@@ -5,6 +5,11 @@ from typing import Any, Dict
 from rich.table import Table
 
 
+def estimate_tokens(text: str) -> int:
+    """Estimate token count from text (rough approximation)."""
+    return len(text) // 4
+
+
 _lock = threading.Lock()
 _stages: Dict[str, Dict[str, int]] = defaultdict(
     lambda: {

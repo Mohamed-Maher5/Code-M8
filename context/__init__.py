@@ -11,7 +11,8 @@ indexing the codebase - no user-facing options required.
 # Simple context building (prompt-based)
 from context.chunker import chunk_file
 from context.context_builder import build_prompt
-from context.token_budget import trim_to_budget, estimate_tokens
+from context.token_budget import trim_to_budget
+from core.token_usage import estimate_tokens  # Re-export from core
 
 # Graph-based RAG (automatic indexing for coding agent)
 from context.graph_index import (

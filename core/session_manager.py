@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 from core.config import SESSIONS_PATH
-from context.token_budget import estimate_tokens
+from core.token_usage import estimate_tokens
 from utils.logger import logger
 
 # current session id — set once when session starts, read everywhere

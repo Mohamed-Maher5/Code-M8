@@ -186,8 +186,10 @@ class MemoryIndex:
                 if any(word in f.lower() for word in query_words):
                     score += 1
 
-            # Check knowledge
-            knowledge = turn.get("knowledge", {})
+            # Check knowledge - Bug 6 Fix: correct path
+            knowledge = turn.get("memory", {}).get(
+                "knowledge", {}
+            )  # was: turn.get("knowledge", {})
             for problem in knowledge.get("problems_found", []):
                 if any(word in problem.lower() for word in query_words):
                     score += 1
@@ -247,7 +249,10 @@ class MemoryIndex:
         solutions = set()
 
         for turn in self.turns:
-            knowledge = turn.get("knowledge", {})
+            # Bug 6 Fix: correct path
+            knowledge = turn.get("memory", {}).get(
+                "knowledge", {}
+            )  # was: turn.get("knowledge", {})
             problems.update(knowledge.get("problems_found", []))
             solutions.update(knowledge.get("solutions_applied", []))
 

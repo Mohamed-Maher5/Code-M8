@@ -34,6 +34,8 @@ class CompactionManager:
         """
         Get fully compacted memory for a session.
 
+        Bug 2 Fix: Added caching to avoid calling LLM on every call.
+
         Returns:
             {
                 "recent_turns": [...],  # Last 4 turns detailed
@@ -60,6 +62,14 @@ class CompactionManager:
 
         if total_turns == 0:
             return self._empty_compacted_memory()
+
+        # Bug 2 Fix: Check cache before computing
+        cache_key = f"{session_id}:{total_turns}"
+        if cache_key in self._compaction_cache:
+            cached = self._compaction_cache[cache_key]
+            # Still update recent_turns with latest data
+            cached["recent_turns"] = turns[-4:]
+            return cached
 
         # Split turns by compaction level
         recent = turns[-4:] if total_turns >= 1 else []
@@ -90,6 +100,9 @@ class CompactionManager:
         if level3_turns:
             result["compaction_level_3"] = compact_turns_with_llm(llm, level3_turns)
             print(f"[COMPACTION] Level 3: {len(level3_turns)} turns → 1 summary")
+
+        # Bug 2 Fix: Cache the result
+        self._compaction_cache[cache_key] = result
 
         return result
 

@@ -5,6 +5,9 @@ from typing import Dict, Any, List, Optional
 from core.memory.memory_index import get_memory_index, load_session_into_index
 from core.session_manager import get_session_id
 
+# Bug 1 Fix: Cache loaded session to avoid rebuilding index every call
+_loaded_session_id: str = ""
+
 
 def retrieve_relevant_memory(query: str, session_id: str = None) -> Dict[str, Any]:
     """
@@ -21,6 +24,8 @@ def retrieve_relevant_memory(query: str, session_id: str = None) -> Dict[str, An
             "context": {...}
         }
     """
+    global _loaded_session_id
+
     # Use current session if not specified
     if session_id is None:
         session_id = get_session_id()
@@ -29,8 +34,10 @@ def retrieve_relevant_memory(query: str, session_id: str = None) -> Dict[str, An
         print("[MEMORY RETRIEVAL] No session ID available")
         return _empty_memory_context()
 
-    # Load session into memory index if needed
-    load_session_into_index(session_id)
+    # Bug 1 Fix: Only rebuild index when session changes
+    if session_id != _loaded_session_id:
+        load_session_into_index(session_id)
+        _loaded_session_id = session_id
 
     index = get_memory_index()
 
@@ -59,8 +66,10 @@ def retrieve_relevant_memory(query: str, session_id: str = None) -> Dict[str, An
         entities = memory.get("entities", {})
         relevant_files.update(entities.get("files", []))
 
-        # Extract problems and solutions
-        knowledge = turn.get("knowledge", {})
+        # Bug 6 Fix: Correct key path for knowledge
+        knowledge = turn.get("memory", {}).get(
+            "knowledge", {}
+        )  # was: turn.get("knowledge", {})
         problems_to_avoid.update(knowledge.get("problems_found", []))
         solutions_to_reuse.update(knowledge.get("solutions_applied", []))
 

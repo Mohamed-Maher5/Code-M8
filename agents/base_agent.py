@@ -23,7 +23,7 @@ from typing_extensions import TypedDict
 
 from core.types import AgentName, Task, TaskResult, make_task_result
 from core.config import AGENT_MESSAGE_BUDGET_TOKENS
-from context.token_budget import estimate_tokens
+from core.token_usage import estimate_tokens
 from core.token_usage import record_usage
 from ui.interrupt import InterruptError, is_interrupted
 from utils.logger import logger

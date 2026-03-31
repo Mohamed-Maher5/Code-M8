@@ -30,6 +30,32 @@ from core.memory.retrieval import (
     get_session_memory_summary,
 )
 
+# SOTA Memory components
+from core.memory.project_memory import (
+    ProjectMemory,
+    get_project_memory,
+)
+
+from core.memory.vector_store import (
+    VectorStore,
+    get_vector_store,
+)
+
+from core.memory.context_injector import (
+    ContextInjector,
+    get_context_injector,
+)
+
+from core.memory.memory_writer import (
+    MemoryWriter,
+    get_memory_writer,
+)
+
+from core.memory.memory_manager import (
+    MemoryManager,
+    get_memory_manager,
+)
+
 __all__ = [
     # Regex-based extraction (legacy)
     "extract_entities",
@@ -50,4 +76,15 @@ __all__ = [
     "retrieve_relevant_memory",
     "build_memory_context_for_orchestrator",
     "get_session_memory_summary",
+    # SOTA components
+    "ProjectMemory",
+    "get_project_memory",
+    "VectorStore",
+    "get_vector_store",
+    "ContextInjector",
+    "get_context_injector",
+    "MemoryWriter",
+    "get_memory_writer",
+    "MemoryManager",
+    "get_memory_manager",
 ]

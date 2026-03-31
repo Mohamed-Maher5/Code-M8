@@ -32,7 +32,7 @@ from core.config import (
     PLANNING_CONTEXT_MAX_TOKENS,
     PLANNING_CONTEXT_MAX_CHARS,
 )
-from context.token_budget import estimate_tokens
+from core.token_usage import estimate_tokens
 from core_logic.dispatcher import Dispatcher
 from core_logic.synthesizer import Synthesizer
 from core_logic.planner import validate_plan, print_plan, plan_summary, fallback_plan
@@ -52,6 +52,7 @@ from core.session_manager import (
     build_compact_memory,
     build_llm_compacted_memory,
     set_llm_for_extraction,
+    get_session_id,
 )
 
 # NEW: Enhanced memory imports
@@ -61,10 +62,13 @@ try:
         build_memory_context_for_orchestrator,
         get_session_memory_summary,
     )
+    from core.memory.memory_manager import get_memory_manager
 
     ENHANCED_MEMORY = True
+    _memory_manager = get_memory_manager()
 except ImportError:
     ENHANCED_MEMORY = False
+    _memory_manager = None
     print("[LOOP DEBUG] Enhanced memory not available")
 
 
@@ -163,39 +167,71 @@ def run_turn(user_input: str) -> str:
             "did we add",
             "we added",
             "we created",
+            # New keywords for "what did you do" type questions
+            "what did you",
+            "what did we",
+            "tell me what",
+            "list what",
+            "recap",
+            # User preference keywords
+            "my name",
+            "what is my",
+            "do you know my",
+            "preference",
+            "i prefer",
+            "i like",
+            "i hate",
+            "i love",
+            "review",
+            "past work",
+            "previous work",
+            "history",
         ]
 
         if any(kw in user_input.lower() for kw in memory_keywords) and ENHANCED_MEMORY:
             try:
                 from core.memory.retrieval import retrieve_relevant_memory
                 from core.session_manager import get_session_id
+                from core.memory.memory_manager import get_memory_manager
 
                 session_id = get_session_id()
                 if session_id:
+                    # Use MemoryManager for richer context
+                    mm = get_memory_manager()
+                    memory_context = mm.build_context(user_input, session_id)
+
+                    # Also get semantic search results
                     memory_result = retrieve_relevant_memory(
                         user_input, session_id=session_id
                     )
 
-                    # Build memory context
                     relevant_files = memory_result.get("relevant_files", [])
                     top_result = memory_result.get("context", {}).get("top_result", {})
                     summary = top_result.get("entities_summary", "")
 
-                    memory_context = f"""
-=== RELEVANT SESSION MEMORY ===
-{summary}
+                    # Combine both
+                    full_context = memory_context
+                    if summary and summary not in full_context:
+                        full_context += f"\n\n=== Previous Work Summary ===\n{summary}\n\nFiles: {', '.join(relevant_files[:5])}"
 
-Files mentioned in related work: {", ".join(relevant_files[:5]) if relevant_files else "None"}
-===================
-"""
-                    base_context += memory_context
+                    base_context = full_context + "\n\n" + base_context
                     print(
                         f"[CHAT MEMORY] Added memory context - {len(relevant_files)} files"
                     )
             except Exception as e:
                 print(f"[CHAT MEMORY] Failed to retrieve memory: {e}")
 
-        return _chat_reply(user_input, base_context)
+        # Get response from chat
+        chat_response = _chat_reply(user_input, base_context)
+
+        # Save turn for chat messages too
+        save_turn(
+            user_message=user_input,
+            all_results=[],
+            final_answer=chat_response,
+        )
+
+        return chat_response
 
     # =============================================================================
     # CHANGED: 2026-03-29 - Build rich context string for orchestrator
@@ -336,6 +372,16 @@ Files involved in related work: {", ".join(relevant_files[:5]) if relevant_files
         all_results=all_results,
         final_answer=response,
     )
+
+    # NEW: Persist memory via MemoryManager
+    if _memory_manager is not None and ENHANCED_MEMORY:
+        try:
+            from core.memory.llm_extractor import extract_with_llm
+
+            llm_memory = extract_with_llm(_qwen_llm, user_input, all_results, response)
+            _memory_manager.on_turn_end(user_input, response, llm_memory)
+        except Exception as e:
+            print(f"[LOOP] MemoryManager.on_turn_end failed: {e}")
 
     logger.info("Turn completed")
 
