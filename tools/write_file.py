@@ -32,9 +32,6 @@
 #         return f"ERROR writing '{path}': {e}"
 
 
-
-
-
 # tools/write_file.py
 # Creates or overwrites any file type in the workspace
 # Used by: Coder agent
@@ -45,15 +42,49 @@ import base64
 import core.config as CONFIG
 
 TEXT_EXTENSIONS = {
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".htm", ".css", ".scss",
-    ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".env",
-    ".md", ".txt", ".rst", ".csv", ".xml", ".sql", ".sh", ".bash",
-    ".c", ".cpp", ".h", ".java", ".go", ".rs", ".rb", ".php",
-    ".gitignore", ".dockerfile", ".makefile", ""
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".env",
+    ".md",
+    ".txt",
+    ".rst",
+    ".csv",
+    ".xml",
+    ".sql",
+    ".sh",
+    ".bash",
+    ".c",
+    ".cpp",
+    ".h",
+    ".java",
+    ".go",
+    ".rs",
+    ".rb",
+    ".php",
+    ".gitignore",
+    ".dockerfile",
+    ".makefile",
+    "",
 }
 
+
 @tool
-def write_file(path: str, content: str, encoding: str = "utf-8", is_base64: bool = False) -> str:
+def write_file(
+    path: str, content: str, encoding: str = "utf-8", is_base64: bool = False
+) -> str:
     """
     Create or overwrite any file type in the workspace.
 
@@ -66,7 +97,7 @@ def write_file(path: str, content: str, encoding: str = "utf-8", is_base64: bool
     Returns a confirmation with the file path and line/byte count.
     """
     workspace = Path(CONFIG.WORKSPACE_PATH).resolve()
-    target    = (workspace / path).resolve()
+    target = (workspace / path).resolve()
 
     if not str(target).startswith(str(workspace)):
         return f"ERROR: path '{path}' is outside the workspace."
@@ -83,12 +114,30 @@ def write_file(path: str, content: str, encoding: str = "utf-8", is_base64: bool
             except Exception as e:
                 return f"ERROR: failed to decode base64 content: {e}"
             target.write_bytes(raw_bytes)
+
+            # Track file creation
+            try:
+                from core.agent_file_tracker import record_file_created
+
+                record_file_created(path)
+            except ImportError:
+                pass
+
             return f"OK: wrote {path} ({len(raw_bytes)} bytes, binary)"
 
         elif ext in TEXT_EXTENSIONS or ext == "":
             # known text file — write with specified encoding
             target.write_text(content, encoding=encoding)
             line_count = content.count("\n") + 1
+
+            # Track file creation
+            try:
+                from core.agent_file_tracker import record_file_created
+
+                record_file_created(path)
+            except ImportError:
+                pass
+
             return f"OK: wrote {path} ({line_count} lines, {encoding})"
 
         else:

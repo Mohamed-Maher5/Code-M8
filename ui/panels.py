@@ -1,9 +1,9 @@
+# ui/panels.py
+# Animated logo and robot ASCII art for Code-M8
+
 import asyncio
 import time
-import threading
 from rich.panel import Panel
-from rich.layout import Layout
-from rich.text import Text
 from rich.console import Console
 from rich.align import Align
 from rich.table import Table
@@ -156,29 +156,3 @@ def print_logo():
         Align.center("[dim]── type a command or start typing your request ──[/dim]")
     )
     console.print()
-
-def build_layout() -> Layout:
-    layout = Layout()
-    layout.split_row(
-        Layout(name="chat",    ratio=3),
-        Layout(name="sidebar", ratio=1)
-    )
-    layout["sidebar"].split_column(
-        Layout(name="files",  ratio=2),
-        Layout(name="status", ratio=1)
-    )
-    return layout
-
-def make_status_panel(message: str) -> Panel:
-    return Panel(
-        Text(message, style="dim"),
-        title="[bold blue] agent status [/bold blue]",
-        border_style="blue"
-    )
-
-def make_files_panel(file_list: str) -> Panel:
-    return Panel(
-        Text(file_list, style="dim"),
-        title="[bold green] workspace files [/bold green]",
-        border_style="green"
-    )

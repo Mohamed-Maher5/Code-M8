@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(d:\\codem8\\code-m8\\venv\\scripts\\python.exe *)",
+      "Bash(timeout *)"
+    ]
+  }
+}

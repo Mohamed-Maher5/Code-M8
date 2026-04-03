@@ -1,0 +1,54 @@
+# Project memory
+
+## Key decisions
+- Implemented `multiply` following existing code conventions
+- Added multiply function to math_utils.py
+- Fixed cache eviction bug
+- Use dataclass for cache entries
+- created data_structures.py with Stack, Queue, and BinaryTree implementations containing docstrings and inline comments
+- created __init__.py to enable package-style imports
+- file creation was necessary to satisfy import requirements from workspace/__init__.py
+- Identified LRUCache as primary temporary storage implementation
+- Located CacheEntry structure definition
+- Added is_empty() check before pop
+- Raised IndexError for empty stack
+- Implemented standard stack pop logic using Python list pop()
+- Exposed Stack class in __init__.py for public API access
+- Confirmed file path using __init__.py import statements
+- Processed data_structures.py for comment removal
+- Searched entire workspace for 'pop' logic
+- Identified LIFO stack, FIFO cache, and queue popleft implementations
+- Created basic frontend structure with HTML/CSS/JS files
+- Initialized frontend implementation with standard file setup
+- Created advanced_features.py module
+- Replaced basic_func() with advanced implementation
+- Added import for advanced features module
+- Enhanced codebase with advanced implementation patterns
+- added responsive navbar with logo and navigation links
+- implemented hero section with title and call-to-action button
+- prioritized structural enhancements over dynamic functionality
+- used semantic HTML elements for accessibility
+- integrated Google Fonts for visual polish
+- Chose MongoDB for flexible artwork metadata storage
+- Implemented SSR for SEO-friendly gallery pages
+- Structured component hierarchy for reusability
+- Included __init__.py due to package initialization role
+- Focused on structural analysis of cache and middleware components
+- created test.txt with 'hello world' content
+- proceed with file creation since test.txt did not exist
+- Identified cache implementation patterns
+- Focused search on cache-related patterns
+- Prioritized lock mechanism and eviction policy analysis
+- Identified validation logic structure for email/password using configurable regex patterns
+- Added explicit empty check to stack pop
+- Used deque.popleft() instead of list.pop(0) for O(1) performance
+- Documented standard stack/queue patterns
+- Identified cache eviction strategy
+- Confirmed absence of front-end directories (app/, components/, pages/)
+
+## User preferences
+- User's name is Nour
+- prefer Python
+- hate Java
+- User's name is building
+- User is building: a coding agent
