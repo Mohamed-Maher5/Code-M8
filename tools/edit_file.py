@@ -18,7 +18,7 @@ def edit_file(path: str, old_content: str, new_content: str) -> str:
     Returns confirmation or error if the match was not found.
     """
     workspace = Path(CONFIG.WORKSPACE_PATH).resolve()
-    target    = (workspace / path).resolve()
+    target = (workspace / path).resolve()
 
     if not str(target).startswith(str(workspace)):
         return f"ERROR: path '{path}' is outside the workspace."
@@ -43,6 +43,15 @@ def edit_file(path: str, old_content: str, new_content: str) -> str:
 
     try:
         target.write_text(updated, encoding="utf-8")
+
+        # Track file modification
+        try:
+            from core.agent_file_tracker import record_file_modified
+
+            record_file_modified(path)
+        except ImportError:
+            pass
+
         return f"OK: edited {path}"
     except Exception as e:
         return f"ERROR writing '{path}': {e}"

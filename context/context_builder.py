@@ -2,20 +2,40 @@
 # This is the ONLY place prompts are built — agents never build prompts inline
 
 from context.chunker import chunk_file
-from context.token_budget import trim_to_budget, estimate_tokens
+from context.token_budget import trim_to_budget
+from core.token_usage import estimate_tokens
 from utils.logger import logger
 
 # common words that mean nothing — ignore them
 STOPWORDS = {
-    "add", "the", "to", "a", "an", "in", "of",
-    "for", "is", "it", "my", "we", "i", "and",
-    "or", "with", "this", "that", "can", "do"
+    "add",
+    "the",
+    "to",
+    "a",
+    "an",
+    "in",
+    "of",
+    "for",
+    "is",
+    "it",
+    "my",
+    "we",
+    "i",
+    "and",
+    "or",
+    "with",
+    "this",
+    "that",
+    "can",
+    "do",
 }
+
 
 def sort_by_relevance(chunks: list[str], user_input: str) -> list[str]:
     # extract meaningful keywords only — ignore stopwords
     keywords = [
-        word for word in user_input.lower().split()
+        word
+        for word in user_input.lower().split()
         if word not in STOPWORDS and len(word) > 2
     ]
 
@@ -44,7 +64,7 @@ def build_prompt(
     history: list,
     user_input: str = "",
     model: str = "hunter",
-    relevant_files: list = None
+    relevant_files: list = None,
 ) -> str:
 
     # select which files to use
@@ -64,20 +84,14 @@ def build_prompt(
 
     # trim to fit token budget
     trimmed = trim_to_budget(
-        all_chunks,
-        model=model,
-        system_prompt=task_instruction,
-        user_input=user_input
+        all_chunks, model=model, system_prompt=task_instruction, user_input=user_input
     )
 
     # assemble file content block
     files_block = "\n\n".join(trimmed)
 
     # assemble history block — last 6 messages only
-    history_block = "\n".join([
-        f"{m['role']}: {m['content']}"
-        for m in history[-6:]
-    ])
+    history_block = "\n".join([f"{m['role']}: {m['content']}" for m in history[-6:]])
 
     # build final prompt
     prompt = f"""
